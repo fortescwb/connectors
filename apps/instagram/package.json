@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/server.js",
-    "lint": "eslint src tests --config ../../tooling/eslint.config.js",
+    "lint": "eslint src tests",
     "test": "vitest run",
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\""
   },
@@ -15,10 +15,8 @@
     "@connectors/core-connectors": "workspace:*",
     "@connectors/core-events": "workspace:*",
     "@connectors/core-logging": "workspace:*",
+    "@connectors/core-runtime": "workspace:*",
     "@connectors/core-signature": "workspace:*",
-    "@connectors/core-tenant": "workspace:*",
-    "@connectors/core-validation": "workspace:*",
-    "@connectors/core-webhooks": "workspace:*",
     "@connectors/adapter-express": "workspace:*",
     "express": "^4.18.2"
   },
@@ -26,7 +24,6 @@
     "@types/express": "^4.17.21",
     "@types/node": "^20.10.6",
     "@types/supertest": "^2.0.16",
-    "eslint": "^8.56.0",
     "prettier": "^3.1.1",
     "supertest": "^6.3.3",
     "typescript": "^5.3.3",
