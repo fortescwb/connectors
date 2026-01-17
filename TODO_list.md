@@ -30,8 +30,12 @@
 
 6. **Desenvolver conectores para calendários e automação**
 
-   * Utilizar os contratos de calendário e iPaaS já definidos em `core-connectors` para construir conectores reais (ex.: Google Calendar, Apple Calendar, Zapier/Make). Implementar `parseEvent` e mapeamentos de webhook para cada provedor, além de testes de integração garantindo correlação, dedupe e assinatura.
-   * Criar registries de capabilities e eventos específicos para esses domínios, seguindo o padrão do runtime unificado.
+   * ✅ Scaffolds criados em `apps/calendar` e `apps/automation`:
+     - ConnectorManifest com capabilities planejadas
+     - Health endpoint funcional
+     - parseEvent stub com TODO explícito
+     - Testes mínimos (health + webhook 400/503)
+   * Próximo passo: implementar integração real com provedores (Google Calendar, Zapier, etc.)
 
 7. **Publicação e uso de pacotes**
 
