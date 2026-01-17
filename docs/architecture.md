@@ -162,3 +162,100 @@ Sempre gera um novo `correlationId` internamente. Mesmo que o cliente envie o he
 **Consistência:**
 
 Em todas as respostas (sucesso e erro), o mesmo `correlationId` aparece no header `x-correlation-id` e no corpo JSON.
+
+---
+
+## Project Standards
+
+Referência rápida de padrões para replicar em novos conectores.
+
+### HTTP Contract
+
+- **Response shape (sucesso):** `{ ok: true, deduped: boolean, correlationId: string }`
+- **Response shape (erro):** `{ ok: false, code: string, message: string, correlationId: string }`
+- **Códigos de erro padrão:** `WEBHOOK_VALIDATION_FAILED` (400), `UNAUTHORIZED` (401), `FORBIDDEN` (403), `SERVICE_UNAVAILABLE` (503), `INTERNAL_ERROR` (500)
+- **Header obrigatório em todas as respostas:** `x-correlation-id`
+- **Content-Type:** `application/json` (POST), `text/plain` (GET verify)
+
+### CorrelationId Rules
+
+- **Precedência POST:** `event.correlationId` > header `x-correlation-id` > gerado
+- **GET /webhook:** Sempre gera novo (ignora header de entrada)
+- **Formato:** `{timestamp_base36}-{random_base36}` (ex: `mkii15va-045ggowpt`)
+- **Consistência:** Mesmo valor em header e body em todas as respostas
+
+### Signature Policy
+
+- **Requisito:** `rawBodyMiddleware()` do `adapter-express` deve ser aplicado ANTES de qualquer parse JSON
+- **Header:** `x-hub-signature-256` (formato `sha256=<hex>`)
+- **Algoritmo:** HMAC-SHA256 com comparação timing-safe (`crypto.timingSafeEqual`)
+- **Comportamento:**
+  - Secret configurado: validação obrigatória, 401 se inválido/ausente
+  - Secret não configurado: skip com log info (`signatureValidation: "skipped"`)
+- **Resposta 401:** `{ ok: false, code: "UNAUTHORIZED", message: "Invalid signature", correlationId }`
+
+### Dedupe Policy
+
+- **Interface:** `DedupeStore` com método `isDuplicate(key: string): Promise<boolean>`
+- **Stores disponíveis:** `InMemoryDedupeStore` (default), `NoopDedupeStore`
+- **TTL default:** 5 minutos (300.000ms)
+- **Chave:** `event.dedupeKey` (formato: `{channel}:{externalId}`)
+- **Resposta em duplicata:** `{ ok: true, deduped: true, correlationId }` (200, não reprocessa)
+
+### Logging Baseline
+
+- **Formato:** JSON estruturado via `createLogger()` do `core-logging`
+- **Campos mínimos:** `service`, `correlationId`, `tenantId`, `eventId`, `eventType`, `dedupeKey`
+- **Mensagens padrão:**
+  - `"Webhook event processed"` — sucesso
+  - `"Duplicate webhook event skipped"` — dedupe
+  - `"Signature validation skipped"` — sem secret configurado
+  - `"Webhook validation failed"` — 400
+  - `"Unauthorized webhook request"` — 401
+  - `"Webhook handler failed"` — 500
+
+### Testing Baseline
+
+- **Framework:** Vitest + Supertest
+- **Casos mínimos para cada conector:**
+  1. Health check (`GET /health` → 200)
+  2. Payload válido → 200 com `deduped: false`
+  3. Payload duplicado → 200 com `deduped: true`
+  4. Payload inválido → 400 com `WEBHOOK_VALIDATION_FAILED`
+  5. Assinatura válida (com secret) → 200
+  6. Assinatura inválida → 401 com `"Invalid signature"`
+  7. Assinatura ausente (com secret) → 401
+  8. Sem secret → 200 com log de skip
+  9. Verificação Meta válida → 200 text/plain com challenge
+  10. Verificação Meta inválida (token) → 403
+  11. Verificação Meta inválida (mode) → 403
+  12. Verificação Meta sem config → 503
+  13. CorrelationId preservado do header
+  14. CorrelationId gerado quando ausente
+  15. CorrelationId preservado em erros
+
+### Estrutura de Novo Conector
+
+```
+apps/{connector}/
+├── package.json          # deps: @connectors/adapter-express, core-*
+├── tsconfig.json
+├── vitest.config.ts
+├── src/
+│   ├── app.ts            # buildApp() com middlewares e rotas
+│   └── server.ts         # entry point
+└── tests/
+    └── webhook.test.ts   # casos mínimos acima
+```
+
+### Checklist de Novo Conector
+
+- [ ] Criar app em `apps/{connector}/`
+- [ ] Configurar `rawBodyMiddleware()` antes de rotas POST
+- [ ] Implementar `correlationIdMiddleware()` (pode copiar do WhatsApp)
+- [ ] Implementar `signatureValidationMiddleware()` com secret específico
+- [ ] Usar `createWebhookProcessor()` com `parseEvent` e `onEvent`
+- [ ] Implementar GET verify específico do provedor (se aplicável)
+- [ ] Definir variáveis de ambiente: `PORT`, `{CONNECTOR}_VERIFY_TOKEN`, `{CONNECTOR}_WEBHOOK_SECRET`
+- [ ] Escrever todos os testes mínimos
+- [ ] Documentar endpoints em `docs/architecture.md`
