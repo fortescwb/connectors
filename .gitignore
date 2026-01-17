@@ -8,3 +8,6 @@ coverage/
 .env.*
 .vscode/
 .idea/
+
+# Local artifacts (not tracked)
+.local/
