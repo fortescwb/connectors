@@ -82,17 +82,35 @@ function generateCorrelationId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 11)}`;
 }
 
+/**
+ * Extract correlationId from headers (handles string or string[] values).
+ */
+function extractCorrelationIdFromHeaders(
+  headers: Record<string, string | string[] | undefined>
+): string | undefined {
+  const headerValue = headers['x-correlation-id'];
+  if (typeof headerValue === 'string') {
+    return headerValue;
+  }
+  if (Array.isArray(headerValue) && headerValue.length > 0) {
+    return headerValue[0];
+  }
+  return undefined;
+}
+
 export function createWebhookProcessor(options: WebhookOptions) {
   const baseLogger = options.logger ?? createLogger({ service: options.serviceName });
   const dedupeStore =
     options.dedupeStore ?? new InMemoryDedupeStore(options.dedupeTtlMs ?? DEFAULT_DEDUPE_TTL_MS);
 
   return async (input: WebhookRequest): Promise<WebhookResponse> => {
-    // Generate correlationId early for error responses
-    const fallbackCorrelationId = generateCorrelationId();
+    // Extract correlationId from headers first, then generate fallback
+    const headerCorrelationId = extractCorrelationIdFromHeaders(input.headers);
+    const fallbackCorrelationId = headerCorrelationId ?? generateCorrelationId();
 
     try {
       const event = await options.parseEvent(input);
+      // Prefer event correlationId, then header, then generated
       const correlationId = event.correlationId ?? fallbackCorrelationId;
 
       const logger = createLogger({

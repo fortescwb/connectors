@@ -14,6 +14,7 @@
   "dependencies": {
     "@connectors/core-events": "workspace:*",
     "@connectors/core-logging": "workspace:*",
+    "@connectors/core-signature": "workspace:*",
     "@connectors/core-tenant": "workspace:*",
     "@connectors/core-validation": "workspace:*",
     "@connectors/core-webhooks": "workspace:*",

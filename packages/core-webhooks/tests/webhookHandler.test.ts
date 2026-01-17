@@ -143,4 +143,106 @@ describe('createWebhookProcessor', () => {
 
     logSpy.mockRestore();
   });
+
+  it('preserves x-correlation-id from request headers in response', async () => {
+    const envelope: ConversationMessageReceivedEvent = makeConversationMessageReceived({
+      tenantId,
+      source: 'test-suite',
+      payload: {
+        channel: 'whatsapp',
+        externalMessageId: 'msg-cid-header-1',
+        conversationId: 'conv-cid-header-1',
+        direction: 'inbound',
+        sender: { id: 'contact-1' },
+        recipient: { id: 'agent-1' },
+        content: { type: 'text', text: 'hello with correlationId' }
+      }
+    });
+
+    const onEvent = vi.fn().mockResolvedValue(undefined);
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    const processor = createWebhookProcessor({
+      serviceName: 'test-service',
+      parseEvent: () => envelope,
+      onEvent,
+      dedupeStore: new NoopDedupeStore()
+    });
+
+    const customCorrelationId = 'custom-cid-12345';
+    const res = await processor({
+      headers: { 'x-correlation-id': customCorrelationId },
+      body: envelope
+    });
+
+    expect(res.status).toBe(200);
+    const body = res.body as { ok: boolean; deduped: boolean; correlationId: string };
+    expect(body.correlationId).toBe(customCorrelationId);
+    expect(res.headers?.['x-correlation-id']).toBe(customCorrelationId);
+
+    logSpy.mockRestore();
+  });
+
+  it('preserves x-correlation-id in error responses', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const onEvent = vi.fn();
+    const processor = createWebhookProcessor({
+      serviceName: 'test-service',
+      parseEvent: () => {
+        throw new ValidationError('invalid payload', []);
+      },
+      onEvent
+    });
+
+    const customCorrelationId = 'error-cid-67890';
+    const res = await processor({
+      headers: { 'x-correlation-id': customCorrelationId },
+      body: {}
+    });
+
+    expect(res.status).toBe(400);
+    const body = res.body as { ok: boolean; code: string; correlationId: string };
+    expect(body.correlationId).toBe(customCorrelationId);
+    expect(res.headers?.['x-correlation-id']).toBe(customCorrelationId);
+
+    logSpy.mockRestore();
+  });
+
+  it('handles x-correlation-id as array (uses first element)', async () => {
+    const envelope: ConversationMessageReceivedEvent = makeConversationMessageReceived({
+      tenantId,
+      source: 'test-suite',
+      payload: {
+        channel: 'whatsapp',
+        externalMessageId: 'msg-cid-array-1',
+        conversationId: 'conv-cid-array-1',
+        direction: 'inbound',
+        sender: { id: 'contact-1' },
+        recipient: { id: 'agent-1' },
+        content: { type: 'text', text: 'hello with array correlationId' }
+      }
+    });
+
+    const onEvent = vi.fn().mockResolvedValue(undefined);
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    const processor = createWebhookProcessor({
+      serviceName: 'test-service',
+      parseEvent: () => envelope,
+      onEvent,
+      dedupeStore: new NoopDedupeStore()
+    });
+
+    const res = await processor({
+      headers: { 'x-correlation-id': ['first-cid', 'second-cid'] },
+      body: envelope
+    });
+
+    expect(res.status).toBe(200);
+    const body = res.body as { ok: boolean; correlationId: string };
+    expect(body.correlationId).toBe('first-cid');
+    expect(res.headers?.['x-correlation-id']).toBe('first-cid');
+
+    logSpy.mockRestore();
+  });
 });

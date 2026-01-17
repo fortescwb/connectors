@@ -50,6 +50,9 @@ importers:
       '@connectors/core-logging':
         specifier: workspace:*
         version: link:../../packages/core-logging
+      '@connectors/core-signature':
+        specifier: workspace:*
+        version: link:../../packages/core-signature
       '@connectors/core-tenant':
         specifier: workspace:*
         version: link:../../packages/core-tenant

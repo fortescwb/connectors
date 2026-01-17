@@ -9,10 +9,11 @@ import {
 } from '@connectors/core-webhooks';
 
 /**
- * Express request with rawBody captured.
+ * Express request with rawBody captured and optional correlationId.
  */
 export interface RawBodyRequest extends express.Request {
   rawBody?: Buffer;
+  correlationId?: string;
 }
 
 /**
@@ -29,10 +30,18 @@ export function rawBodyMiddleware(): RequestHandler {
 
 export function createExpressWebhookHandler(processor: ReturnType<typeof createWebhookProcessor>): RequestHandler {
   return async (req, res, _next) => {
+    const rawReq = req as RawBodyRequest;
+
+    // Build headers, ensuring correlationId from request is included
+    const headers = { ...req.headers } as Record<string, string | string[] | undefined>;
+    if (rawReq.correlationId && !headers['x-correlation-id']) {
+      headers['x-correlation-id'] = rawReq.correlationId;
+    }
+
     const input: WebhookRequest = {
-      headers: req.headers as Record<string, string | string[] | undefined>,
+      headers,
       body: req.body,
-      rawBody: (req as RawBodyRequest).rawBody
+      rawBody: rawReq.rawBody
     };
 
     const result: WebhookResponse = await processor(input);
