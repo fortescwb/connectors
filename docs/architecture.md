@@ -91,12 +91,39 @@ interface ConnectorManifest {
   healthPath: string;      // Default: '/health'
   requiredEnvVars: string[];
   optionalEnvVars: string[];
+  auth?: AuthConfig;       // Configuração de autenticação
+  webhook?: WebhookConfig; // Configuração de webhook
 }
 
 interface Capability {
   id: CapabilityId;        // Ver lista de capabilities
   status: 'active' | 'planned' | 'disabled';
   description?: string;
+}
+
+interface AuthConfig {
+  type: 'none' | 'api_key' | 'oauth2' | 'system_jwt';
+  oauth?: OAuthConfig;     // Obrigatório quando type = 'oauth2'
+}
+
+interface OAuthConfig {
+  authorizationUrl: string;
+  tokenUrl: string;
+  scopes: string[];
+  redirectUrl?: string;
+  audience?: string;
+  pkce: boolean;           // Default: false
+}
+
+interface WebhookConfig {
+  path: string;
+  signature?: WebhookSignatureConfig;
+}
+
+interface WebhookSignatureConfig {
+  enabled: boolean;
+  algorithm: 'hmac-sha256' | 'none';
+  requireRawBody: boolean;
 }
 ```
 
@@ -121,6 +148,58 @@ export const instagramManifest: ConnectorManifest = {
   healthPath: '/health',
   requiredEnvVars: ['INSTAGRAM_VERIFY_TOKEN'],
   optionalEnvVars: ['INSTAGRAM_WEBHOOK_SECRET', 'INSTAGRAM_ACCESS_TOKEN'],
+};
+```
+
+### Exemplo com OAuth2 e Webhook Signature
+
+```typescript
+import { capability, type ConnectorManifest } from '@connectors/core-connectors';
+
+export const instagramManifestWithAuth: ConnectorManifest = {
+  id: 'instagram',
+  name: 'Instagram Business',
+  version: '0.2.0',
+  platform: 'meta',
+  capabilities: [
+    capability('inbound_messages', 'active', 'Receive DMs via webhook'),
+    capability('comment_ingest', 'active', 'Receive comments on posts'),
+    capability('comment_reply', 'planned', 'Reply to comments via API'),
+    capability('ads_leads_ingest', 'active', 'Receive leads from Lead Ads'),
+    capability('webhook_verification', 'active', 'Meta webhook verification'),
+  ],
+  webhookPath: '/webhook',
+  healthPath: '/health',
+  requiredEnvVars: ['INSTAGRAM_VERIFY_TOKEN'],
+  optionalEnvVars: ['INSTAGRAM_WEBHOOK_SECRET', 'INSTAGRAM_ACCESS_TOKEN'],
+  
+  // Configuração OAuth2 para Facebook Login
+  auth: {
+    type: 'oauth2',
+    oauth: {
+      authorizationUrl: 'https://www.facebook.com/v18.0/dialog/oauth',
+      tokenUrl: 'https://graph.facebook.com/v18.0/oauth/access_token',
+      scopes: [
+        'pages_messaging',
+        'pages_manage_metadata',
+        'instagram_basic',
+        'instagram_manage_messages',
+        'instagram_manage_comments',
+      ],
+      redirectUrl: 'https://app.example.com/oauth/callback',
+      pkce: false, // Meta não suporta PKCE atualmente
+    },
+  },
+  
+  // Configuração de webhook signature
+  webhook: {
+    path: '/webhook',
+    signature: {
+      enabled: true,
+      algorithm: 'hmac-sha256',
+      requireRawBody: true, // Obrigatório para validação HMAC
+    },
+  },
 };
 ```
 
@@ -326,6 +405,47 @@ Referência rápida de padrões para replicar em novos conectores.
   - Secret não configurado: skip com log info (`signatureValidation: "skipped"`)
 - **Resposta 401:** `{ ok: false, code: "UNAUTHORIZED", message: "Invalid signature", correlationId }`
 
+### rawBodyMiddleware Obrigatório
+
+Quando `webhook.signature.requireRawBody: true` está configurado no manifest, o conector **deve** aplicar `rawBodyMiddleware()` do `adapter-express` antes de qualquer parser JSON.
+
+**Por que é necessário:**
+
+1. **Integridade da assinatura:** O Meta (e outros provedores) assina o corpo literal da requisição HTTP. Após o parse JSON, o corpo original é perdido e a assinatura não pode ser verificada.
+
+2. **Comparação byte-a-byte:** A validação HMAC compara o hash do corpo recebido com o hash esperado. Qualquer diferença (espaços, encoding, ordem de campos) invalida a assinatura.
+
+**Uso correto:**
+
+```typescript
+import { rawBodyMiddleware, createExpressAdapter } from '@connectors/adapter-express';
+
+const app = express();
+
+// 1. rawBodyMiddleware PRIMEIRO - captura Buffer original
+app.use(rawBodyMiddleware());
+
+// 2. Depois o adapter configura rotas com acesso a req.rawBody
+const adapter = createExpressAdapter({ app });
+```
+
+**Erro comum:**
+
+```typescript
+// ❌ ERRADO: express.json() antes de rawBodyMiddleware
+app.use(express.json());
+app.use(rawBodyMiddleware()); // rawBody estará vazio!
+
+// ✅ CORRETO: rawBodyMiddleware antes de qualquer parser
+app.use(rawBodyMiddleware()); // Captura Buffer antes do parse
+```
+
+**Detecção de configuração incorreta:**
+
+Se o manifest declara `webhook.signature.requireRawBody: true` mas `req.rawBody` está vazio, o runtime deve:
+- Logar warning: `"rawBody not available for signature verification"`
+- Retornar 500 com `INTERNAL_ERROR` (não 401, pois é erro de configuração, não de assinatura)
+
 ### Dedupe Policy
 
 - **Interface:** `DedupeStore` com método `isDuplicate(key: string): Promise<boolean>`
@@ -386,7 +506,10 @@ apps/{connector}/
 
 - [ ] Criar app em `apps/{connector}/`
 - [ ] Criar `src/manifest.ts` com `ConnectorManifest` declarando capabilities
-- [ ] Configurar `rawBodyMiddleware()` antes de rotas POST
+- [ ] Configurar `auth` no manifest (escolher: `none`, `api_key`, `oauth2`, `system_jwt`)
+- [ ] Se `auth.type = oauth2`: configurar `oauth.authorizationUrl`, `oauth.tokenUrl`, `oauth.scopes`
+- [ ] Configurar `webhook.signature` no manifest se o provedor requer validação
+- [ ] Se `webhook.signature.requireRawBody = true`: aplicar `rawBodyMiddleware()` ANTES de rotas POST
 - [ ] Implementar `correlationIdMiddleware()` (pode copiar do WhatsApp/Instagram)
 - [ ] Implementar `signatureValidationMiddleware()` com secret específico
 - [ ] Usar `createWebhookProcessor()` com `parseEvent` e `onEvent`
@@ -394,6 +517,7 @@ apps/{connector}/
 - [ ] Implementar `/health` retornando `{ status: 'ok', connector: manifest.id }`
 - [ ] Definir variáveis de ambiente: `PORT`, `{CONNECTOR}_VERIFY_TOKEN`, `{CONNECTOR}_WEBHOOK_SECRET`
 - [ ] Adicionar testes do manifest (capabilities declaradas)
+- [ ] Adicionar testes das novas configurações `auth` e `webhook.signature`
 - [ ] Escrever todos os testes mínimos de webhook
 - [ ] Documentar endpoints em `docs/architecture.md`
 
