@@ -6,21 +6,42 @@ Connectors monorepo para canais integrados ao Pyloto CRM. Cada app em `apps/*` �
 - Scripts gerais: `pnpm build`, `pnpm test`, `pnpm lint`, `pnpm format`
 
 ## Estrutura
-- `apps/whatsapp`: servidor HTTP com `/health` e placeholder `/webhook`
-- `packages/core-events`: contratos, schemas Zod e helpers de eventos
-- `packages/core-validation`: utilitário `safeParseOrThrow`
-- `packages/core-tenant`: tipos/guardas de tenant
-- `packages/core-logging`: logger estruturado (console JSON)
-- `packages/core-webhooks`: processamento agnóstico de webhooks com dedupe e logging
-- `packages/adapter-express`: adapter Express para o processor de webhooks
+
+### Apps (`apps/*`)
+Conectores deployáveis que usam o runtime unificado:
+- `apps/whatsapp`: conector WhatsApp Business (webhook + health)
+- `apps/instagram`: conector Instagram/Meta (comentários, leads, mensagens)
+
+### Runtime e Contratos (`packages/*`)
+- **`core-runtime`**: runtime unificado — correlationId, assinatura, dedupe, rate-limit, logging
+- **`core-connectors`**: manifests, capabilities, contratos de calendário e automação
+- **`core-events`**: envelopes de evento padronizados (mensagens, leads, status)
+
+### Domínios
+- **`core-ads`**: parsing e normalização de leads (Meta Lead Ads)
+- **`core-comments`**: parsing e normalização de comentários (Instagram/Facebook)
+- **`core-signature`**: verificação HMAC-SHA256 de webhooks
+- **`core-rate-limit`**: rate limiting e retry com backoff
+
+### Infraestrutura
+- `core-validation`: `safeParseOrThrow` com Zod
+- `core-tenant`: tipos e guardas de tenant
+- `core-logging`: logger estruturado (JSON)
+- `core-sync`: checkpoints para sync incremental
+- `core-auth`: armazenamento de tokens OAuth
+
+### Legado (em depreciação)
+- `core-webhooks`, `adapter-express`: substituídos por `core-runtime`
+
+### Tooling
 - `tooling/`: configs compartilhadas (eslint, prettier, vitest)
-- `docs/architecture.md`: convenções de eventos, idempotência e multi-tenant
+- `docs/architecture.md`: convenções detalhadas
 
 ## Convenções
-- Sempre use envelopes de evento padronizados (`eventId`, `eventType`, `occurredAt`, `tenantId`, `source`, `correlationId`, `causationId`, `dedupeKey`, `payload`, `meta`).
-- Use `buildDedupeKey(channel, externalId)` para dedupe e mantenha `dedupeKey` obrigatório.
+- Apps usam `core-runtime` para webhook handling (não reimplementar correlação/dedupe/assinatura).
+- Envelopes de evento padronizados via `core-events`.
 - Apps nunca importam código de outras apps; apenas de `packages/*`.
-- Logging estruturado: utilize `createLogger` e inclua `tenantId`, `correlationId`, `eventId`, `eventType` quando disponíveis.
+- Logging estruturado via `createLogger` com `tenantId`, `correlationId`, `eventId`.
 
 ## Rodando localmente
 ```bash
@@ -30,7 +51,18 @@ pnpm test    # roda Vitest em todos os workspaces
 pnpm lint    # ESLint flat config
 ```
 
-## Próximos passos sugeridos
-- Conectar webhooks reais por canal reutilizando `core-events` para validação e idempotência.
-- Adicionar autenticação/assinatura dos webhooks na camada de app.
-- Publicar os pacotes em um registry privado para consumo pelos conectores.
+## Gerenciamento de tarefas
+
+| Recurso | Propósito |
+|---------|----------|
+| `TODO_list.md` (raiz) | Lista oficial do próximo ciclo de trabalho |
+| `.local/*` | Artefatos locais (histórico, rascunhos) — **não versionados** |
+| GitHub Issues | Backlog formal rastreável para tarefas maiores |
+
+## Próximos passos
+
+Prioridades do próximo ciclo (detalhes em [`TODO_list.md`](./TODO_list.md)):
+
+1. **DedupeStore persistente** — implementar Redis/DB para ambientes distribuídos
+2. **Conectores de calendário e automação** — Google Calendar, Zapier/Make
+3. **Publicação de pacotes** — registry npm privado para `@connectors/core-*`
