@@ -96,6 +96,8 @@ Endpoint principal para receber webhooks do Meta/WhatsApp.
 
 > **Nota:** Em qualquer status (sucesso ou erro), o header `x-correlation-id` é retornado e espelha o `correlationId` do corpo.
 
+> **Duas origens de 401:** A mensagem `"Invalid signature"` indica falha na validação HMAC (middleware de assinatura). A mensagem `"unauthorized"` indica que o handler da aplicação ou `parseEvent` lançou um erro com `status: 401` (tratado pelo core-webhooks). Essa distinção ajuda no diagnóstico.
+
 ### Política de Assinatura
 
 - **Variável de ambiente:** `WHATSAPP_WEBHOOK_SECRET`
@@ -105,8 +107,10 @@ Endpoint principal para receber webhooks do Meta/WhatsApp.
   - Requisições com assinatura inválida ou ausente retornam `401`
 - **Comportamento quando não configurado:**
   - Validação de assinatura é ignorada (skip)
-  - Log de info é emitido: `"Signature validation skipped"`
+  - Log de info é emitido: `"Signature validation skipped"` com campo `signatureValidation: "skipped"`
   - Útil para desenvolvimento local
+
+> **Importante:** A verificação HMAC exige o corpo bruto (`rawBody`) antes do parse JSON. O middleware `rawBodyMiddleware()` do `adapter-express` captura o Buffer original via `express.json({ verify })`. Isso é essencial porque o Meta assina o corpo literal da requisição.
 
 ### Política de Deduplicação
 
@@ -125,6 +129,11 @@ Endpoint principal para receber webhooks do Meta/WhatsApp.
 - **Comportamento em duplicata:**
   - Se `deduped === true`, retorna `200` com `{ ok: true, deduped: true, correlationId }` e não reprocessa o evento.
   - Se não for duplicado, processa e retorna `200` com `{ ok: true, deduped: false, correlationId }`.
+
+- **Ambientes distribuídos:**
+  - `InMemoryDedupeStore` é adequado para instância única ou testes.
+  - Para deploy multi-instância (Kubernetes, ECS, etc.), implemente `DedupeStore` com backend persistente (Redis, DynamoDB, PostgreSQL).
+  - O TTL deve ser configurado de acordo com a janela de retry do Meta (recomendado: 5-15 minutos).
 
 ### Variáveis de ambiente
 
@@ -148,7 +157,7 @@ O valor final é retornado tanto no corpo (`correlationId`) quanto no header de 
 
 **GET /webhook:**
 
-Sempre gera um novo `correlationId` (não lê header de entrada nem envelope).
+Sempre gera um novo `correlationId` internamente. Mesmo que o cliente envie o header `x-correlation-id`, ele será ignorado — a rota de verificação Meta não preserva correlationId de entrada. Isso simplifica a implementação e evita que um atacante force um ID específico durante a verificação.
 
 **Consistência:**
 
