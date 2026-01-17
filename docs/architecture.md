@@ -63,14 +63,56 @@ Comandos são ações que o sistema envia para conectores executarem:
 
 ### Pacotes de Suporte
 
-| Pacote | Responsabilidade |
-|--------|------------------|
-| `core-connectors` | Manifest e capabilities |
-| `core-auth` | Tokens OAuth, storage de credenciais |
-| `core-sync` | Checkpoints, sync pull/push |
-| `core-ads` | Schemas de leads e formulários |
-| `core-comments` | Schemas de comentários e replies |
-| `core-rate-limit` | Rate limiting e backoff |
+| Pacote | Responsabilidade | Status |
+|--------|------------------|--------|
+| `core-connectors` | Manifest e capabilities | active |
+| `core-runtime` | Runtime unificado (correlação, dedupe, assinatura, rate-limit) | active |
+| `core-auth` | Tokens OAuth, storage de credenciais | active |
+| `core-sync` | Checkpoints, sync pull/push | active |
+| `core-ads` | Schemas de leads e formulários | active |
+| `core-comments` | Schemas de comentários e replies | active |
+| `core-rate-limit` | Rate limiting e backoff | active |
+| `core-messaging` | Mensagens diretas (DMs) inbound/outbound | **planned** |
+| `core-reactions` | Reações (likes, emojis) em posts/comentários | **planned** |
+
+---
+
+## Domínios Planejados
+
+### `core-messaging` (planned)
+
+**Responsabilidade**: Normalização de mensagens diretas (DMs) para canais como Instagram Direct, Facebook Messenger, e futuros provedores de chat.
+
+**Distinção de `core-events`**: `core-events` define o envelope genérico `ConversationMessageReceived`. `core-messaging` adiciona:
+- Schemas específicos de DM (threads, typing indicators, read receipts)
+- Parsing de payloads de provedores (Meta DM webhook → `DirectMessage`)
+- Helpers de dedupe key para mensagens diretas
+
+**Eventos esperados**:
+| Tipo | Descrição |
+|------|-----------|
+| `DirectMessage` | Mensagem direta normalizada |
+| `TypingIndicator` | Indicador de digitação |
+| `ReadReceipt` | Confirmação de leitura |
+
+**Relação com `core-runtime`**: Conectores usam `core-runtime` para webhook handling; `core-messaging` fornece `parseEvent` específico para DMs.
+
+### `core-reactions` (planned)
+
+**Responsabilidade**: Normalização de reações (likes, emojis, reactions) em posts, comentários e mensagens.
+
+**Distinção de `core-comments`**: `core-comments` trata o conteúdo textual de comentários. `core-reactions` trata ações de engagement sem texto:
+- Likes em posts/stories
+- Reações com emoji em comentários
+- Reactions em mensagens (👍, ❤️, etc.)
+
+**Eventos esperados**:
+| Tipo | Descrição |
+|------|-----------|
+| `Reaction` | Reação normalizada (emoji, tipo, target) |
+| `ReactionRemoved` | Remoção de reação |
+
+**Relação com `core-runtime`**: Conectores registram capability `reaction_ingest` no manifest; `core-reactions` fornece parsing e dedupe key helpers.
 
 ---
 
