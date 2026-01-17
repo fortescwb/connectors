@@ -1,176 +1,206 @@
-import express, { type Express, type RequestHandler } from 'express';
+import express, { type Express } from 'express';
 
 import { parseEventEnvelope } from '@connectors/core-events';
 import { createLogger } from '@connectors/core-logging';
-import { assertTenantId } from '@connectors/core-tenant';
-import { createExpressWebhookHandler, rawBodyMiddleware, type RawBodyRequest } from '@connectors/adapter-express';
-import { createWebhookProcessor } from '@connectors/core-webhooks';
+import { rawBodyMiddleware, type RawBodyRequest } from '@connectors/adapter-express';
 import { verifyHmacSha256 } from '@connectors/core-signature';
+import {
+  buildWebhookHandlers,
+  type RuntimeRequest,
+  type SignatureVerifier,
+  type ParsedEvent,
+  type WebhookVerifyHandler
+} from '@connectors/core-runtime';
+import { capability, type ConnectorManifest } from '@connectors/core-connectors';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MANIFEST
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const whatsappManifest: ConnectorManifest = {
+  id: 'whatsapp',
+  name: 'WhatsApp Business',
+  version: '0.1.0',
+  platform: 'meta',
+  capabilities: [
+    capability('inbound_messages', 'active', 'Receive messages via WhatsApp webhook'),
+    capability('outbound_messages', 'planned', 'Send messages via Graph API'),
+    capability('message_status_updates', 'planned', 'Receive message delivery status'),
+    capability('webhook_verification', 'active', 'Meta webhook verification endpoint')
+  ],
+  webhookPath: '/webhook',
+  healthPath: '/health',
+  requiredEnvVars: ['WHATSAPP_VERIFY_TOKEN'],
+  optionalEnvVars: ['WHATSAPP_WEBHOOK_SECRET']
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LOGGER
+// ─────────────────────────────────────────────────────────────────────────────
 
 const logger = createLogger({ service: 'whatsapp-app' });
 
-function generateCorrelationId(): string {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 11)}`;
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// SIGNATURE VERIFIER
+// ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Express request with correlationId attached.
- */
-export interface CorrelatedRequest extends RawBodyRequest {
-  correlationId?: string;
-}
+function createMetaSignatureVerifier(): SignatureVerifier {
+  const secret = process.env.WHATSAPP_WEBHOOK_SECRET;
 
-/**
- * Middleware to extract or generate correlationId.
- * Attaches to req.correlationId and sets x-correlation-id response header.
- */
-function correlationIdMiddleware(): RequestHandler {
-  return (req, res, next) => {
-    const headerCorrelationId = req.headers['x-correlation-id'];
-    const correlationId =
-      typeof headerCorrelationId === 'string'
-        ? headerCorrelationId
-        : Array.isArray(headerCorrelationId)
-          ? headerCorrelationId[0]
-          : generateCorrelationId();
+  return {
+    // Always enabled so verify() is called, letting us log the skip
+    enabled: true,
+    verify: (request) => {
+      if (!secret) {
+        logger.info('Signature validation skipped', { signatureValidation: 'skipped' });
+        return { valid: true };
+      }
 
-    (req as CorrelatedRequest).correlationId = correlationId;
-    res.setHeader('x-correlation-id', correlationId);
-    next();
+      const signatureHeader = request.headers['x-hub-signature-256'];
+      const signature = Array.isArray(signatureHeader) ? signatureHeader[0] : signatureHeader;
+
+      const result = verifyHmacSha256({
+        secret,
+        rawBody: request.rawBody ?? '',
+        signatureHeader: signature ?? ''
+      });
+
+      if (!result.valid) {
+        return { valid: false, code: 'INVALID_SIGNATURE' };
+      }
+
+      return { valid: true };
+    }
   };
 }
 
-/**
- * Middleware to validate webhook signature when WHATSAPP_WEBHOOK_SECRET is set.
- * Requires correlationIdMiddleware to run first.
- * If secret is not set, validation is skipped and logged.
- */
-function signatureValidationMiddleware(): RequestHandler {
-  return (req, res, next) => {
-    const secret = process.env.WHATSAPP_WEBHOOK_SECRET;
-    const correlationId = (req as CorrelatedRequest).correlationId!;
+// ─────────────────────────────────────────────────────────────────────────────
+// WEBHOOK VERIFY HANDLER (GET)
+// ─────────────────────────────────────────────────────────────────────────────
 
-    if (!secret) {
-      logger.info('Signature validation skipped', {
-        signatureValidation: 'skipped',
-        correlationId
-      });
-      return next();
-    }
+const verifyWebhook: WebhookVerifyHandler = (query) => {
+  const verifyToken = process.env.WHATSAPP_VERIFY_TOKEN;
 
-    const rawReq = req as RawBodyRequest;
-    const signatureHeader = req.headers['x-hub-signature-256'] as string | undefined;
+  if (!verifyToken) {
+    logger.error('WHATSAPP_VERIFY_TOKEN not configured');
+    return {
+      success: false,
+      errorCode: 'SERVICE_UNAVAILABLE',
+      errorMessage: 'Webhook verification not configured'
+    };
+  }
 
-    const result = verifyHmacSha256({
-      secret,
-      rawBody: rawReq.rawBody ?? '',
-      signatureHeader: signatureHeader ?? ''
-    });
+  if (query['hub.mode'] !== 'subscribe') {
+    logger.warn('Webhook verification failed: invalid hub.mode', { mode: query['hub.mode'] });
+    return {
+      success: false,
+      errorCode: 'FORBIDDEN',
+      errorMessage: 'Invalid hub.mode'
+    };
+  }
 
-    if (!result.valid) {
-      logger.warn('Webhook signature validation failed', {
-        code: result.code,
-        correlationId
-      });
+  if (query['hub.verify_token'] !== verifyToken) {
+    logger.warn('Webhook verification failed: invalid verify token');
+    return {
+      success: false,
+      errorCode: 'FORBIDDEN',
+      errorMessage: 'Invalid verify token'
+    };
+  }
 
-      res.status(401).json({
-        ok: false,
-        code: 'UNAUTHORIZED',
-        message: 'Invalid signature',
-        correlationId
-      });
-      return;
-    }
+  logger.info('Webhook verification successful');
+  return {
+    success: true,
+    challenge: query['hub.challenge']
+  };
+};
 
-    next();
+// ─────────────────────────────────────────────────────────────────────────────
+// EVENT PARSER
+// ─────────────────────────────────────────────────────────────────────────────
+
+function parseEvent(request: RuntimeRequest): ParsedEvent {
+  const envelope = parseEventEnvelope(request.body);
+
+  return {
+    capabilityId: 'inbound_messages',
+    dedupeKey: envelope.dedupeKey,
+    correlationId: envelope.correlationId,
+    tenant: envelope.tenantId,
+    payload: envelope
   };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// APP BUILDER
+// ─────────────────────────────────────────────────────────────────────────────
 
 export function buildApp(): Express {
   const app = express();
 
-  // Use rawBodyMiddleware which captures raw body AND parses JSON
+  // Capture raw body for signature verification
   app.use(rawBodyMiddleware());
 
+  // Health check
   app.get('/health', (_req, res) => {
     res.status(200).json({ status: 'ok' });
   });
 
-  /**
-   * GET /webhook - Meta/WhatsApp webhook verification endpoint
-   * https://developers.facebook.com/docs/graph-api/webhooks/getting-started#verification-requests
-   */
-  app.get('/webhook', (req, res) => {
-    const correlationId = generateCorrelationId();
-    const mode = req.query['hub.mode'] as string | undefined;
-    const token = req.query['hub.verify_token'] as string | undefined;
-    const challenge = req.query['hub.challenge'] as string | undefined;
-
-    res.setHeader('x-correlation-id', correlationId);
-    const verifyToken = process.env.WHATSAPP_VERIFY_TOKEN;
-
-    // If WHATSAPP_VERIFY_TOKEN is not configured, return 503
-    if (!verifyToken) {
-      logger.error('WHATSAPP_VERIFY_TOKEN not configured', { correlationId });
-      res.status(503).json({
-        ok: false,
-        code: 'SERVICE_UNAVAILABLE',
-        message: 'Webhook verification not configured',
-        correlationId
-      });
-      return;
-    }
-
-    // Validate hub.mode first
-    if (mode !== 'subscribe') {
-      logger.warn('Webhook verification failed: invalid hub.mode', { correlationId, mode });
-      res.status(403).json({
-        ok: false,
-        code: 'FORBIDDEN',
-        message: 'Invalid hub.mode',
-        correlationId
-      });
-      return;
-    }
-
-    // Validate verify token
-    if (token !== verifyToken) {
-      logger.warn('Webhook verification failed: invalid verify token', { correlationId });
-      res.status(403).json({
-        ok: false,
-        code: 'FORBIDDEN',
-        message: 'Invalid verify token',
-        correlationId
-      });
-      return;
-    }
-
-    // Success
-    logger.info('Webhook verification successful', { correlationId });
-    res.status(200).type('text/plain').send(challenge ?? '');
-  });
-
-  const processor = createWebhookProcessor({
-    serviceName: 'whatsapp-app',
-    parseEvent: (input) => {
-      const envelope = parseEventEnvelope(input.body);
-      assertTenantId(envelope.tenantId);
-      return envelope;
+  // Build runtime handlers
+  const { handleGet, handlePost } = buildWebhookHandlers({
+    manifest: whatsappManifest,
+    registry: {
+      inbound_messages: async (event, ctx) => {
+        ctx.logger.info('Received webhook event', {
+          dedupeKey: (event as { dedupeKey?: string }).dedupeKey
+        });
+      }
     },
-    onEvent: async (event, ctx) => {
-      ctx.logger.info('Received webhook event', {
-        dedupeKey: event.dedupeKey
-      });
-    },
+    parseEvent,
+    verifyWebhook,
+    signatureVerifier: createMetaSignatureVerifier(),
     logger
   });
 
-  app.post(
-    '/webhook',
-    correlationIdMiddleware(),
-    signatureValidationMiddleware(),
-    createExpressWebhookHandler(processor)
-  );
+  // GET /webhook - Meta verification
+  app.get('/webhook', async (req, res) => {
+    const result = await handleGet({
+      headers: req.headers as Record<string, string | string[] | undefined>,
+      query: req.query as Record<string, string | undefined>,
+      body: req.body,
+      rawBody: (req as RawBodyRequest).rawBody
+    });
+
+    if (result.headers) {
+      for (const [key, value] of Object.entries(result.headers)) {
+        res.setHeader(key, value);
+      }
+    }
+
+    if (result.contentType === 'text/plain') {
+      res.status(result.status).type('text/plain').send(result.body);
+    } else {
+      res.status(result.status).json(result.body);
+    }
+  });
+
+  // POST /webhook - Event ingestion
+  app.post('/webhook', async (req, res) => {
+    const result = await handlePost({
+      headers: req.headers as Record<string, string | string[] | undefined>,
+      query: req.query as Record<string, string | undefined>,
+      body: req.body,
+      rawBody: (req as RawBodyRequest).rawBody
+    });
+
+    if (result.headers) {
+      for (const [key, value] of Object.entries(result.headers)) {
+        res.setHeader(key, value);
+      }
+    }
+
+    res.status(result.status).json(result.body);
+  });
 
   return app;
 }
