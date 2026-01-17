@@ -5,6 +5,138 @@
 - Apps não podem importar código de outras apps. Toda colaboração deve passar por `packages/*`.
 - Configurações compartilhadas ficam em `tooling/` (eslint, prettier, vitest).
 
+---
+
+## Integration Contract
+
+O Integration Contract define como conectores interagem com o sistema de forma padronizada.
+
+### Capabilities
+
+Cada conector declara suas capabilities em um `ConnectorManifest`. Capabilities são identificadores padronizados que indicam o que o conector suporta:
+
+| Capability | Descrição |
+|------------|-----------|
+| `inbound_messages` | Receber mensagens de usuários |
+| `outbound_messages` | Enviar mensagens para usuários |
+| `message_status_updates` | Receber status de mensagens (sent, delivered, read, failed) |
+| `comment_ingest` | Receber comentários em posts/mídias |
+| `comment_reply` | Responder a comentários |
+| `reaction_ingest` | Receber reações (likes, emojis) |
+| `ads_leads_ingest` | Receber leads de Lead Ads |
+| `ads_campaign_sync` | Sincronizar campanhas de ads |
+| `contact_sync` | Sincronizar contatos |
+| `conversation_sync` | Sincronizar conversas históricas |
+| `channel_health` | Monitorar saúde do canal |
+| `webhook_verification` | Endpoint de verificação do provedor |
+
+Cada capability tem um status:
+- **`active`**: Implementado e funcional
+- **`planned`**: Na roadmap, ainda não implementado
+- **`disabled`**: Implementado mas desativado
+
+### Eventos Normalizados
+
+Eventos gerados por conectores usam o `EventEnvelope` padronizado:
+
+| eventType | Pacote de origem | Uso |
+|-----------|------------------|-----|
+| `ConversationMessageReceived` | `core-events` | Mensagens inbound/outbound |
+| `ConversationMessageStatusUpdated` | `core-events` | Status de entrega |
+| `LeadCaptured` | `core-events` | Leads de formulários/ads |
+| `ConversationStateChanged` | `core-events` | Transições de estado de conversa |
+| `ChannelHealthStatusChanged` | `core-events` | Mudanças de health do canal |
+
+Eventos de domínios específicos:
+| Contrato | Pacote | Uso |
+|----------|--------|-----|
+| `AdLead` | `core-ads` | Leads normalizados de Lead Ads |
+| `SocialComment` | `core-comments` | Comentários normalizados |
+
+### Comandos Normalizados
+
+Comandos são ações que o sistema envia para conectores executarem:
+
+| Comando | Pacote | Uso |
+|---------|--------|-----|
+| `CommentReplyCommand` | `core-comments` | Responder a um comentário |
+
+### Pacotes de Suporte
+
+| Pacote | Responsabilidade |
+|--------|------------------|
+| `core-connectors` | Manifest e capabilities |
+| `core-auth` | Tokens OAuth, storage de credenciais |
+| `core-sync` | Checkpoints, sync pull/push |
+| `core-ads` | Schemas de leads e formulários |
+| `core-comments` | Schemas de comentários e replies |
+| `core-rate-limit` | Rate limiting e backoff |
+
+---
+
+## Connector Manifest
+
+Todo conector deve exportar um `ConnectorManifest` que declara suas capabilities e metadados.
+
+### Schema
+
+```typescript
+interface ConnectorManifest {
+  id: string;              // Identificador único (ex: 'instagram')
+  name: string;            // Nome legível (ex: 'Instagram Business')
+  version: string;         // Semver (ex: '0.1.0')
+  platform: string;        // Provedor (ex: 'meta', 'google')
+  capabilities: Capability[];
+  webhookPath: string;     // Default: '/webhook'
+  healthPath: string;      // Default: '/health'
+  requiredEnvVars: string[];
+  optionalEnvVars: string[];
+}
+
+interface Capability {
+  id: CapabilityId;        // Ver lista de capabilities
+  status: 'active' | 'planned' | 'disabled';
+  description?: string;
+}
+```
+
+### Exemplo (Instagram)
+
+```typescript
+import { capability, type ConnectorManifest } from '@connectors/core-connectors';
+
+export const instagramManifest: ConnectorManifest = {
+  id: 'instagram',
+  name: 'Instagram Business',
+  version: '0.1.0',
+  platform: 'meta',
+  capabilities: [
+    capability('inbound_messages', 'active', 'Receive DMs via webhook'),
+    capability('comment_ingest', 'active', 'Receive comments on posts'),
+    capability('comment_reply', 'planned', 'Reply to comments via API'),
+    capability('ads_leads_ingest', 'active', 'Receive leads from Lead Ads'),
+    capability('webhook_verification', 'active', 'Meta webhook verification'),
+  ],
+  webhookPath: '/webhook',
+  healthPath: '/health',
+  requiredEnvVars: ['INSTAGRAM_VERIFY_TOKEN'],
+  optionalEnvVars: ['INSTAGRAM_WEBHOOK_SECRET', 'INSTAGRAM_ACCESS_TOKEN'],
+};
+```
+
+### Uso
+
+```typescript
+import { hasCapability } from '@connectors/core-connectors';
+import { instagramManifest } from './manifest.js';
+
+if (hasCapability(instagramManifest, 'comment_reply', 'active')) {
+  // Registrar rota de reply
+}
+```
+
+---
+
 ## Envelope de eventos
 Campos obrigatórios em todos os eventos (`EventEnvelope`):
 - `eventId`: UUID gerado no conector.
@@ -240,9 +372,11 @@ Referência rápida de padrões para replicar em novos conectores.
 apps/{connector}/
 ├── package.json          # deps: @connectors/adapter-express, core-*
 ├── tsconfig.json
+├── tsconfig.build.json
 ├── vitest.config.ts
 ├── src/
 │   ├── app.ts            # buildApp() com middlewares e rotas
+│   ├── manifest.ts       # ConnectorManifest exportado
 │   └── server.ts         # entry point
 └── tests/
     └── webhook.test.ts   # casos mínimos acima
@@ -251,11 +385,21 @@ apps/{connector}/
 ### Checklist de Novo Conector
 
 - [ ] Criar app em `apps/{connector}/`
+- [ ] Criar `src/manifest.ts` com `ConnectorManifest` declarando capabilities
 - [ ] Configurar `rawBodyMiddleware()` antes de rotas POST
-- [ ] Implementar `correlationIdMiddleware()` (pode copiar do WhatsApp)
+- [ ] Implementar `correlationIdMiddleware()` (pode copiar do WhatsApp/Instagram)
 - [ ] Implementar `signatureValidationMiddleware()` com secret específico
 - [ ] Usar `createWebhookProcessor()` com `parseEvent` e `onEvent`
 - [ ] Implementar GET verify específico do provedor (se aplicável)
+- [ ] Implementar `/health` retornando `{ status: 'ok', connector: manifest.id }`
 - [ ] Definir variáveis de ambiente: `PORT`, `{CONNECTOR}_VERIFY_TOKEN`, `{CONNECTOR}_WEBHOOK_SECRET`
-- [ ] Escrever todos os testes mínimos
+- [ ] Adicionar testes do manifest (capabilities declaradas)
+- [ ] Escrever todos os testes mínimos de webhook
 - [ ] Documentar endpoints em `docs/architecture.md`
+
+### Conectores Implementados
+
+| Conector | ID | Platform | Status | Capabilities |
+|----------|-----|----------|--------|--------------|
+| WhatsApp | `whatsapp` | meta | ✅ Produção | inbound_messages, outbound_messages, webhook_verification |
+| Instagram | `instagram` | meta | 🚧 Scaffold | inbound_messages, comment_ingest, ads_leads_ingest, webhook_verification |
