@@ -2,11 +2,17 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildAdLeadDedupeKey,
+  buildAdLeadFromMetaRaw,
+  dedupeKeyLead,
+  dedupeKeyLeadFromRaw,
   extractContactFromLead,
+  extractContactFromMetaRaw,
+  isValidMetaLeadRaw,
   normalizeFieldType,
   parseAdLead,
   parseLeadFormConfig,
-  type AdLead
+  type AdLead,
+  type MetaLeadRawData
 } from '../src/index.js';
 
 describe('core-ads', () => {
@@ -130,6 +136,133 @@ describe('core-ads', () => {
     it('returns undefined for unknown fields', () => {
       expect(normalizeFieldType('custom_field_xyz')).toBeUndefined();
       expect(normalizeFieldType('preferences')).toBeUndefined();
+    });
+  });
+
+  describe('Meta Lead normalization', () => {
+    const validMetaRaw: MetaLeadRawData = {
+      leadgen_id: 'meta-lead-12345',
+      form_id: 'meta-form-67890',
+      ad_id: 'meta-ad-111',
+      adgroup_id: 'meta-campaign-222',
+      page_id: 'meta-page-333',
+      created_time: '2026-01-17T12:00:00Z',
+      field_data: [
+        { name: 'email', values: ['user@example.com'] },
+        { name: 'full_name', values: ['Jane Doe'] },
+        { name: 'phone_number', values: ['+5511999999999'] }
+      ],
+      is_organic: false
+    };
+
+    describe('buildAdLeadFromMetaRaw', () => {
+      it('converts Meta raw data to AdLead', () => {
+        const lead = buildAdLeadFromMetaRaw(validMetaRaw);
+        expect(lead.externalLeadId).toBe('meta-lead-12345');
+        expect(lead.externalFormId).toBe('meta-form-67890');
+        expect(lead.externalAdId).toBe('meta-ad-111');
+        expect(lead.externalCampaignId).toBe('meta-campaign-222');
+        expect(lead.platform).toBe('meta');
+        expect(lead.fields).toHaveLength(3);
+        expect(lead.createdAt).toBe('2026-01-17T12:00:00Z');
+        expect(lead.isOrganic).toBe(false);
+      });
+
+      it('normalizes field types from Meta field names', () => {
+        const lead = buildAdLeadFromMetaRaw(validMetaRaw);
+        const emailField = lead.fields.find((f) => f.name === 'email');
+        expect(emailField?.type).toBe('email');
+        expect(emailField?.value).toBe('user@example.com');
+      });
+
+      it('handles missing field_data', () => {
+        const rawWithoutFields: MetaLeadRawData = {
+          ...validMetaRaw,
+          field_data: undefined
+        };
+        const lead = buildAdLeadFromMetaRaw(rawWithoutFields);
+        expect(lead.fields).toEqual([]);
+      });
+
+      it('handles organic leads', () => {
+        const organicRaw: MetaLeadRawData = {
+          ...validMetaRaw,
+          is_organic: true
+        };
+        const lead = buildAdLeadFromMetaRaw(organicRaw);
+        expect(lead.isOrganic).toBe(true);
+      });
+
+      it('preserves raw data when provided', () => {
+        const rawWithDebug: MetaLeadRawData = {
+          ...validMetaRaw,
+          _raw: { original: 'payload' }
+        };
+        const lead = buildAdLeadFromMetaRaw(rawWithDebug);
+        expect(lead.meta).toEqual({ raw: { original: 'payload' } });
+      });
+    });
+
+    describe('dedupeKeyLead', () => {
+      it('builds stable dedupe key from AdLead', () => {
+        const lead = buildAdLeadFromMetaRaw(validMetaRaw);
+        const key = dedupeKeyLead(lead);
+        expect(key).toBe('meta:lead:meta-lead-12345');
+      });
+
+      it('is deterministic for same input', () => {
+        const lead = buildAdLeadFromMetaRaw(validMetaRaw);
+        const key1 = dedupeKeyLead(lead);
+        const key2 = dedupeKeyLead(lead);
+        expect(key1).toBe(key2);
+      });
+    });
+
+    describe('dedupeKeyLeadFromRaw', () => {
+      it('builds stable dedupe key from raw data', () => {
+        const key = dedupeKeyLeadFromRaw(validMetaRaw);
+        expect(key).toBe('meta:lead:meta-lead-12345');
+      });
+
+      it('matches dedupeKeyLead output', () => {
+        const lead = buildAdLeadFromMetaRaw(validMetaRaw);
+        expect(dedupeKeyLeadFromRaw(validMetaRaw)).toBe(dedupeKeyLead(lead));
+      });
+    });
+
+    describe('extractContactFromMetaRaw', () => {
+      it('extracts contact info from raw data', () => {
+        const contact = extractContactFromMetaRaw(validMetaRaw);
+        expect(contact.email).toBe('user@example.com');
+        expect(contact.fullName).toBe('Jane Doe');
+        expect(contact.phone).toBe('+5511999999999');
+      });
+    });
+
+    describe('isValidMetaLeadRaw', () => {
+      it('returns true for valid raw data', () => {
+        expect(isValidMetaLeadRaw(validMetaRaw)).toBe(true);
+      });
+
+      it('returns false for missing leadgen_id', () => {
+        const invalid = { ...validMetaRaw, leadgen_id: '' };
+        expect(isValidMetaLeadRaw(invalid)).toBe(false);
+      });
+
+      it('returns false for missing form_id', () => {
+        const invalid = { ...validMetaRaw, form_id: '' };
+        expect(isValidMetaLeadRaw(invalid)).toBe(false);
+      });
+
+      it('returns false for null/undefined', () => {
+        expect(isValidMetaLeadRaw(null)).toBe(false);
+        expect(isValidMetaLeadRaw(undefined)).toBe(false);
+      });
+
+      it('returns false for non-object', () => {
+        expect(isValidMetaLeadRaw('string')).toBe(false);
+        expect(isValidMetaLeadRaw(123)).toBe(false);
+      });
     });
   });
 });

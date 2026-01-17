@@ -188,3 +188,136 @@ export function extractMentions(text: string): string[] {
   const matches = text.matchAll(mentionRegex);
   return [...matches].map((m) => m[1]);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// META COMMENTS NORMALIZATION
+// Helpers for converting Meta (Facebook/Instagram) comment raw data to normalized format
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Raw comment data structure from Meta webhook (Instagram/Facebook).
+ * This is a subset of the actual Meta webhook payload.
+ */
+export interface MetaCommentRawData {
+  /** Comment ID from Meta */
+  id: string;
+
+  /** Post/Media ID this comment is on */
+  media_id?: string;
+  post_id?: string;
+
+  /** Parent comment ID (for replies) */
+  parent_id?: string;
+
+  /** Comment text */
+  text: string;
+
+  /** Timestamp when comment was created (ISO-8601 or Unix) */
+  timestamp?: string;
+  created_time?: string;
+
+  /** Commenter information */
+  from?: {
+    id: string;
+    name?: string;
+    username?: string;
+    profile_picture_url?: string;
+  };
+
+  /** Is this comment hidden */
+  hidden?: boolean;
+
+  /** Platform identifier */
+  _platform?: 'instagram' | 'facebook';
+
+  /** Original raw payload for debugging */
+  _raw?: Record<string, unknown>;
+}
+
+/**
+ * Build a SocialComment from Meta comment raw data.
+ * This is a normalization helper for Meta webhook payloads.
+ */
+export function buildSocialCommentFromMetaRaw(raw: MetaCommentRawData): SocialComment {
+  const platform = raw._platform ?? 'instagram';
+  const externalPostId = raw.media_id ?? raw.post_id ?? '';
+  const timestamp = raw.timestamp ?? raw.created_time ?? new Date().toISOString();
+
+  return {
+    externalCommentId: raw.id,
+    externalPostId,
+    parentCommentId: raw.parent_id,
+    platform,
+    author: {
+      externalUserId: raw.from?.id ?? 'unknown',
+      displayName: raw.from?.name,
+      username: raw.from?.username,
+      avatarUrl: raw.from?.profile_picture_url,
+      isOwner: false
+    },
+    content: {
+      type: 'text',
+      text: raw.text
+    },
+    createdAt: timestamp,
+    isReply: !!raw.parent_id,
+    isHidden: raw.hidden ?? false,
+    meta: raw._raw ? { raw: raw._raw } : undefined
+  };
+}
+
+/**
+ * Build dedupe key for a comment.
+ * Uses platform + comment ID for stable deduplication.
+ */
+export function dedupeKeyComment(comment: SocialComment): string {
+  return buildCommentDedupeKey(comment.platform, comment.externalCommentId);
+}
+
+/**
+ * Build dedupe key for a Meta comment from raw data.
+ */
+export function dedupeKeyCommentFromRaw(raw: MetaCommentRawData): string {
+  const platform = raw._platform ?? 'instagram';
+  return buildCommentDedupeKey(platform, raw.id);
+}
+
+/**
+ * Extract minimal normalized author info from Meta raw comment.
+ */
+export function extractAuthorFromMetaRaw(raw: MetaCommentRawData): CommentAuthor {
+  return {
+    externalUserId: raw.from?.id ?? 'unknown',
+    displayName: raw.from?.name,
+    username: raw.from?.username,
+    avatarUrl: raw.from?.profile_picture_url,
+    isOwner: false
+  };
+}
+
+/**
+ * Validate that a raw Meta comment has minimum required fields.
+ */
+export function isValidMetaCommentRaw(raw: unknown): raw is MetaCommentRawData {
+  if (!raw || typeof raw !== 'object') return false;
+  const data = raw as Record<string, unknown>;
+  return (
+    typeof data.id === 'string' &&
+    data.id.length > 0 &&
+    typeof data.text === 'string'
+  );
+}
+
+/**
+ * Check if a Meta comment is a reply to another comment.
+ */
+export function isMetaCommentReply(raw: MetaCommentRawData): boolean {
+  return !!raw.parent_id;
+}
+
+/**
+ * Extract post/media ID from Meta raw comment.
+ */
+export function extractPostIdFromMetaRaw(raw: MetaCommentRawData): string | undefined {
+  return raw.media_id ?? raw.post_id;
+}

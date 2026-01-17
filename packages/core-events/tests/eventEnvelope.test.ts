@@ -5,8 +5,10 @@ import type { TenantId } from '@connectors/core-tenant';
 
 import {
   EVENT_TYPES,
+  makeCommentReceived,
   makeConversationMessageReceived,
   makeConversationMessageStatusUpdated,
+  makeLeadCaptured,
   parseEventEnvelope
 } from '../src/index.js';
 
@@ -62,5 +64,112 @@ describe('event envelopes', () => {
     expect(parsed.eventType).toBe(EVENT_TYPES.ConversationMessageStatusUpdated);
     expect(parsed.payload.status).toBe('sent');
     expect(parsed.dedupeKey).toBe('whatsapp:msg-2');
+  });
+
+  it('creates CommentReceived event with correct dedupe key', () => {
+    const envelope = makeCommentReceived({
+      tenantId,
+      source: 'instagram-webhook',
+      payload: {
+        channel: 'instagram',
+        externalCommentId: 'comment-12345',
+        externalPostId: 'media-67890',
+        author: {
+          externalUserId: 'user-111',
+          displayName: 'Jane Doe',
+          username: 'janedoe'
+        },
+        content: {
+          type: 'text',
+          text: 'Great post! 🔥'
+        },
+        isReply: false,
+        isHidden: false
+      }
+    });
+
+    const parsed = parseEventEnvelope(envelope);
+    expect(parsed.eventType).toBe(EVENT_TYPES.CommentReceived);
+    expect(parsed.dedupeKey).toBe('instagram:comment-12345');
+    if (parsed.eventType === EVENT_TYPES.CommentReceived) {
+      expect(parsed.payload.author.username).toBe('janedoe');
+      expect(parsed.payload.content.text).toBe('Great post! 🔥');
+    }
+  });
+
+  it('creates CommentReceived reply event with parent reference', () => {
+    const envelope = makeCommentReceived({
+      tenantId,
+      source: 'instagram-webhook',
+      payload: {
+        channel: 'instagram',
+        externalCommentId: 'reply-999',
+        externalPostId: 'media-67890',
+        parentCommentId: 'comment-12345',
+        author: {
+          externalUserId: 'user-222',
+          displayName: 'John Smith'
+        },
+        content: {
+          type: 'text',
+          text: 'Thanks!'
+        },
+        isReply: true,
+        isHidden: false
+      }
+    });
+
+    const parsed = parseEventEnvelope(envelope);
+    expect(parsed.eventType).toBe(EVENT_TYPES.CommentReceived);
+    if (parsed.eventType === EVENT_TYPES.CommentReceived) {
+      expect(parsed.payload.parentCommentId).toBe('comment-12345');
+      expect(parsed.payload.isReply).toBe(true);
+    }
+  });
+
+  it('creates LeadCaptured event with correct dedupe key', () => {
+    const envelope = makeLeadCaptured({
+      tenantId,
+      source: 'instagram-lead-ads',
+      payload: {
+        channel: 'instagram',
+        leadId: 'internal-lead-001',
+        externalLeadId: 'meta-lead-12345',
+        contact: {
+          name: 'Alice Johnson',
+          email: 'alice@example.com',
+          phone: '+5511999999999'
+        },
+        sourceContext: {
+          campaign: 'summer-sale',
+          medium: 'lead_ad'
+        }
+      }
+    });
+
+    const parsed = parseEventEnvelope(envelope);
+    expect(parsed.eventType).toBe(EVENT_TYPES.LeadCaptured);
+    expect(parsed.dedupeKey).toBe('instagram:meta-lead-12345');
+    if (parsed.eventType === EVENT_TYPES.LeadCaptured) {
+      expect(parsed.payload.contact.email).toBe('alice@example.com');
+      expect(parsed.payload.sourceContext?.campaign).toBe('summer-sale');
+    }
+  });
+
+  it('uses leadId for dedupe when externalLeadId missing', () => {
+    const envelope = makeLeadCaptured({
+      tenantId,
+      source: 'manual-entry',
+      payload: {
+        channel: 'crm',
+        leadId: 'internal-lead-002',
+        contact: {
+          name: 'Bob Wilson'
+        }
+      }
+    });
+
+    const parsed = parseEventEnvelope(envelope);
+    expect(parsed.dedupeKey).toBe('crm:internal-lead-002');
   });
 });

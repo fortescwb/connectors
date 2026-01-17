@@ -199,3 +199,112 @@ export function normalizeFieldType(fieldName: string): LeadFormFieldType | undef
   };
   return mappings[normalized];
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// META LEAD ADS NORMALIZATION
+// Helpers for converting Meta (Facebook/Instagram) Lead Ads raw data to normalized format
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Raw lead data structure from Meta Lead Ads webhook.
+ * This is a subset of the actual Meta webhook payload.
+ */
+export interface MetaLeadRawData {
+  /** Lead ID from Meta */
+  leadgen_id: string;
+
+  /** Form ID from Meta */
+  form_id: string;
+
+  /** Ad ID (optional) */
+  ad_id?: string;
+
+  /** Campaign ID (optional) */
+  adgroup_id?: string;
+
+  /** Page ID that owns the form */
+  page_id?: string;
+
+  /** Timestamp when lead was created */
+  created_time: string;
+
+  /** Form field values */
+  field_data?: Array<{
+    name: string;
+    values: string[];
+  }>;
+
+  /** Is this an organic lead (not from paid ad) */
+  is_organic?: boolean;
+
+  /** Original raw payload for debugging */
+  _raw?: Record<string, unknown>;
+}
+
+/**
+ * Build an AdLead from Meta Lead Ads raw data.
+ * This is a normalization helper for Meta webhook payloads.
+ */
+export function buildAdLeadFromMetaRaw(raw: MetaLeadRawData): AdLead {
+  const fields: LeadFormField[] = (raw.field_data ?? []).map((field) => ({
+    name: field.name,
+    type: normalizeFieldType(field.name),
+    value: field.values[0] ?? ''
+  }));
+
+  return {
+    externalLeadId: raw.leadgen_id,
+    externalFormId: raw.form_id,
+    externalAdId: raw.ad_id,
+    externalCampaignId: raw.adgroup_id,
+    platform: 'meta',
+    fields,
+    createdAt: raw.created_time,
+    isOrganic: raw.is_organic ?? false,
+    meta: raw._raw ? { raw: raw._raw } : undefined
+  };
+}
+
+/**
+ * Build dedupe key for a Meta Lead.
+ * Uses platform + lead ID for stable deduplication.
+ */
+export function dedupeKeyLead(lead: AdLead): string {
+  return buildAdLeadDedupeKey(lead.platform, lead.externalLeadId);
+}
+
+/**
+ * Build dedupe key for a Meta Lead from raw data.
+ */
+export function dedupeKeyLeadFromRaw(raw: MetaLeadRawData): string {
+  return buildAdLeadDedupeKey('meta', raw.leadgen_id);
+}
+
+/**
+ * Extract minimal normalized contact from Meta raw lead.
+ */
+export function extractContactFromMetaRaw(raw: MetaLeadRawData): {
+  email?: string;
+  phone?: string;
+  fullName?: string;
+  firstName?: string;
+  lastName?: string;
+} {
+  const lead = buildAdLeadFromMetaRaw(raw);
+  return extractContactFromLead(lead);
+}
+
+/**
+ * Validate that a raw Meta lead has minimum required fields.
+ */
+export function isValidMetaLeadRaw(raw: unknown): raw is MetaLeadRawData {
+  if (!raw || typeof raw !== 'object') return false;
+  const data = raw as Record<string, unknown>;
+  return (
+    typeof data.leadgen_id === 'string' &&
+    data.leadgen_id.length > 0 &&
+    typeof data.form_id === 'string' &&
+    data.form_id.length > 0 &&
+    typeof data.created_time === 'string'
+  );
+}

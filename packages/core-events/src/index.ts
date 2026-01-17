@@ -9,6 +9,7 @@ export const EVENT_TYPES = {
   ConversationMessageReceived: 'ConversationMessageReceived',
   ConversationMessageStatusUpdated: 'ConversationMessageStatusUpdated',
   LeadCaptured: 'LeadCaptured',
+  CommentReceived: 'CommentReceived',
   ConversationStateChanged: 'ConversationStateChanged',
   ChannelHealthStatusChanged: 'ChannelHealthStatusChanged'
 } as const;
@@ -139,6 +140,30 @@ const channelHealthStatusChangedPayloadSchema = z.object({
   metadata: metadataSchema
 });
 
+const commentReceivedPayloadSchema = z.object({
+  channel: z.string().min(1),
+  externalCommentId: z.string().min(1),
+  externalPostId: z.string().min(1),
+  parentCommentId: z.string().optional(),
+  threadId: z.string().optional(),
+  author: z.object({
+    externalUserId: z.string().min(1),
+    displayName: z.string().optional(),
+    username: z.string().optional(),
+    avatarUrl: z.string().url().optional(),
+    isOwner: z.boolean().default(false)
+  }),
+  content: z.object({
+    type: z.enum(['text', 'image', 'video', 'sticker', 'emoji']),
+    text: z.string().optional(),
+    mediaUrl: z.string().url().optional()
+  }),
+  isReply: z.boolean().default(false),
+  isHidden: z.boolean().default(false),
+  commentedAt: isoDateStringSchema.optional(),
+  metadata: metadataSchema
+});
+
 const conversationMessageReceivedEnvelopeSchema = baseEnvelopeSchema.extend({
   eventType: z.literal(EVENT_TYPES.ConversationMessageReceived),
   payload: conversationMessageReceivedPayloadSchema
@@ -164,10 +189,16 @@ const channelHealthStatusChangedEnvelopeSchema = baseEnvelopeSchema.extend({
   payload: channelHealthStatusChangedPayloadSchema
 });
 
+const commentReceivedEnvelopeSchema = baseEnvelopeSchema.extend({
+  eventType: z.literal(EVENT_TYPES.CommentReceived),
+  payload: commentReceivedPayloadSchema
+});
+
 export const eventEnvelopeSchema = z.discriminatedUnion('eventType', [
   conversationMessageReceivedEnvelopeSchema,
   conversationMessageStatusUpdatedEnvelopeSchema,
   leadCapturedEnvelopeSchema,
+  commentReceivedEnvelopeSchema,
   conversationStateChangedEnvelopeSchema,
   channelHealthStatusChangedEnvelopeSchema
 ]);
@@ -176,6 +207,7 @@ const eventEnvelopeSchemas = {
   [EVENT_TYPES.ConversationMessageReceived]: conversationMessageReceivedEnvelopeSchema,
   [EVENT_TYPES.ConversationMessageStatusUpdated]: conversationMessageStatusUpdatedEnvelopeSchema,
   [EVENT_TYPES.LeadCaptured]: leadCapturedEnvelopeSchema,
+  [EVENT_TYPES.CommentReceived]: commentReceivedEnvelopeSchema,
   [EVENT_TYPES.ConversationStateChanged]: conversationStateChangedEnvelopeSchema,
   [EVENT_TYPES.ChannelHealthStatusChanged]: channelHealthStatusChangedEnvelopeSchema
 } as const;
@@ -186,6 +218,7 @@ export type EventPayloadMap = {
     typeof conversationMessageStatusUpdatedPayloadSchema
   >;
   [EVENT_TYPES.LeadCaptured]: z.infer<typeof leadCapturedPayloadSchema>;
+  [EVENT_TYPES.CommentReceived]: z.infer<typeof commentReceivedPayloadSchema>;
   [EVENT_TYPES.ConversationStateChanged]: z.infer<typeof conversationStateChangedPayloadSchema>;
   [EVENT_TYPES.ChannelHealthStatusChanged]: z.infer<
     typeof channelHealthStatusChangedPayloadSchema
@@ -201,6 +234,7 @@ export type ConversationMessageReceivedEvent =
 export type ConversationMessageStatusUpdatedEvent =
   z.infer<typeof conversationMessageStatusUpdatedEnvelopeSchema>;
 export type LeadCapturedEvent = z.infer<typeof leadCapturedEnvelopeSchema>;
+export type CommentReceivedEvent = z.infer<typeof commentReceivedEnvelopeSchema>;
 export type ConversationStateChangedEvent = z.infer<typeof conversationStateChangedEnvelopeSchema>;
 export type ChannelHealthStatusChangedEvent =
   z.infer<typeof channelHealthStatusChangedEnvelopeSchema>;
@@ -294,6 +328,20 @@ export function makeLeadCaptured(
     ...params,
     dedupeKey,
     eventType: EVENT_TYPES.LeadCaptured
+  });
+}
+
+export function makeCommentReceived(
+  params: EventBuilderBase<typeof EVENT_TYPES.CommentReceived>
+): CommentReceivedEvent {
+  const dedupeKey =
+    params.dedupeKey ??
+    buildDedupeKey(params.payload.channel, params.payload.externalCommentId);
+
+  return makeEventEnvelope({
+    ...params,
+    dedupeKey,
+    eventType: EVENT_TYPES.CommentReceived
   });
 }
 
