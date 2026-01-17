@@ -22,7 +22,11 @@
 
 5. **Implementar `DedupeStore` persistente**
 
-   * O runtime oferece apenas `InMemoryDedupeStore` e `NoopDedupeStore`. Para ambientes distribuídos, criar uma implementação de `DedupeStore` baseada em Redis ou banco de dados, com TTL configurável conforme a janela de retry dos provedores. Incluir instruções de configuração no README/arquitetura.
+   * ✅ `RedisDedupeStore` implementado em `core-runtime` com:
+     - Interface `RedisClient` compatível com ioredis/node-redis
+     - Fail modes: `open` (bloqueia em erro) e `closed` (permite em erro)
+     - TTL configurável via parâmetro
+     - Documentação no README do `core-runtime`
 
 6. **Desenvolver conectores para calendários e automação**
 

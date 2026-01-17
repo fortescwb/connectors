@@ -588,3 +588,11 @@ export function buildWebhookHandlers<TPayload = unknown>(
 // ─────────────────────────────────────────────────────────────────────────────
 
 export { DEFAULT_DEDUPE_TTL_MS };
+
+// Re-export Redis DedupeStore for distributed environments
+export {
+  RedisDedupeStore,
+  createRedisDedupeStore,
+  type RedisClient,
+  type RedisDedupeStoreOptions
+} from './redis-dedupe-store.js';

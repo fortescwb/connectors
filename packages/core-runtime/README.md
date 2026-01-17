@@ -97,8 +97,48 @@ interface DedupeStore {
 ```
 
 Built-in implementations:
-- `InMemoryDedupeStore` - In-memory with TTL (default)
+- `InMemoryDedupeStore` - In-memory with TTL (default, single-instance only)
 - `NoopDedupeStore` - Never deduplicates
+- `RedisDedupeStore` - Redis-based for distributed environments
+
+#### Redis DedupeStore (Distributed)
+
+For multi-instance deployments, use `RedisDedupeStore`:
+
+```typescript
+import Redis from 'ioredis';
+import { createConnectorRuntime, createRedisDedupeStore } from '@connectors/core-runtime';
+
+const redis = new Redis(process.env.REDIS_URL);
+
+const dedupeStore = createRedisDedupeStore({
+  client: redis,
+  keyPrefix: 'myapp:dedupe:',  // Optional, default: 'dedupe:'
+  failMode: 'open',            // 'open' = block on error, 'closed' = allow on error
+  onError: (err, ctx) => {
+    console.error('Redis dedupe error', { error: err.message, ...ctx });
+  }
+});
+
+const runtime = createConnectorRuntime({
+  // ...
+  dedupeStore,
+});
+```
+
+**Fail modes:**
+- `open` (default): On Redis error, treat as duplicate → blocks processing (safer, no duplicates)
+- `closed`: On Redis error, treat as new → allows processing (may cause duplicates)
+
+**Redis client interface:**
+```typescript
+interface RedisClient {
+  set(key: string, value: string, mode: 'NX', flag: 'PX', ttlMs: number): Promise<string | null>;
+  exists(key: string): Promise<number>;
+}
+```
+
+Compatible with `ioredis`, `redis` (node-redis v4+), and similar clients.
 
 ### `RateLimiter`
 
