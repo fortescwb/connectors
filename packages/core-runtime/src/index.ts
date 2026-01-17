@@ -410,11 +410,8 @@ export function buildWebhookHandlers<TPayload = unknown>(
     signatureVerifier,
     dedupeStore = new InMemoryDedupeStore(),
     dedupeTtlMs = DEFAULT_DEDUPE_TTL_MS,
-    rateLimiter,
-    logger: baseLogger
+    rateLimiter
   } = config;
-
-  const _defaultLogger = baseLogger ?? createLogger({ service: manifest.id });
 
   // ─────────────────────────────────────────────────────────────────────────
   // GET Handler (Webhook Verification)
