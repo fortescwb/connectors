@@ -11,6 +11,8 @@ const resolveAlias = {
   '@connectors/core-logging': path.join(workspaceRoot, 'packages/core-logging/src/index.ts'),
   '@connectors/core-webhooks': path.join(workspaceRoot, 'packages/core-webhooks/src/index.ts'),
   '@connectors/core-signature': path.join(workspaceRoot, 'packages/core-signature/src/index.ts'),
+  '@connectors/core-runtime': path.join(workspaceRoot, 'packages/core-runtime/src/index.ts'),
+  '@connectors/core-connectors': path.join(workspaceRoot, 'packages/core-connectors/src/index.ts'),
   '@connectors/adapter-express': path.join(workspaceRoot, 'packages/adapter-express/src/index.ts')
 };
 
