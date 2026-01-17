@@ -21,15 +21,11 @@ export interface CorrelatedRequest extends RawBodyRequest {
 }
 
 /**
- * Middleware to validate webhook signature when WHATSAPP_WEBHOOK_SECRET is set.
- * Also extracts or generates correlationId and attaches it to the request.
- * If secret is not set, validation is skipped and logged.
+ * Middleware to extract or generate correlationId.
+ * Attaches to req.correlationId and sets x-correlation-id response header.
  */
-function createSignatureValidationMiddleware(): RequestHandler {
+function correlationIdMiddleware(): RequestHandler {
   return (req, res, next) => {
-    const secret = process.env.WHATSAPP_WEBHOOK_SECRET;
-
-    // Extract correlationId from header or generate a new one
     const headerCorrelationId = req.headers['x-correlation-id'];
     const correlationId =
       typeof headerCorrelationId === 'string'
@@ -38,14 +34,23 @@ function createSignatureValidationMiddleware(): RequestHandler {
           ? headerCorrelationId[0]
           : generateCorrelationId();
 
-    // Attach to request for downstream handlers
     (req as CorrelatedRequest).correlationId = correlationId;
-
-    // Always set response header
     res.setHeader('x-correlation-id', correlationId);
+    next();
+  };
+}
+
+/**
+ * Middleware to validate webhook signature when WHATSAPP_WEBHOOK_SECRET is set.
+ * Requires correlationIdMiddleware to run first.
+ * If secret is not set, validation is skipped and logged.
+ */
+function signatureValidationMiddleware(): RequestHandler {
+  return (req, res, next) => {
+    const secret = process.env.WHATSAPP_WEBHOOK_SECRET;
+    const correlationId = (req as CorrelatedRequest).correlationId!;
 
     if (!secret) {
-      // No secret configured - skip validation but log it
       logger.info('Signature validation skipped', {
         signatureValidation: 'skipped',
         correlationId
@@ -101,12 +106,12 @@ export function buildApp(): Express {
     const token = req.query['hub.verify_token'] as string | undefined;
     const challenge = req.query['hub.challenge'] as string | undefined;
 
+    res.setHeader('x-correlation-id', correlationId);
     const verifyToken = process.env.WHATSAPP_VERIFY_TOKEN;
 
     // If WHATSAPP_VERIFY_TOKEN is not configured, return 503
     if (!verifyToken) {
       logger.error('WHATSAPP_VERIFY_TOKEN not configured', { correlationId });
-      res.setHeader('x-correlation-id', correlationId);
       res.status(503).json({
         ok: false,
         code: 'SERVICE_UNAVAILABLE',
@@ -116,27 +121,33 @@ export function buildApp(): Express {
       return;
     }
 
-    // Validate the verification request
-    if (mode === 'subscribe' && token === verifyToken) {
-      logger.info('Webhook verification successful', { correlationId });
-      res.setHeader('x-correlation-id', correlationId);
-      res.status(200).type('text/plain').send(challenge ?? '');
+    // Validate hub.mode first
+    if (mode !== 'subscribe') {
+      logger.warn('Webhook verification failed: invalid hub.mode', { correlationId, mode });
+      res.status(403).json({
+        ok: false,
+        code: 'FORBIDDEN',
+        message: 'Invalid hub.mode',
+        correlationId
+      });
       return;
     }
 
-    // Invalid verification request
-    logger.warn('Webhook verification failed', {
-      correlationId,
-      mode,
-      tokenMatch: token === verifyToken
-    });
-    res.setHeader('x-correlation-id', correlationId);
-    res.status(403).json({
-      ok: false,
-      code: 'FORBIDDEN',
-      message: 'Invalid verify token',
-      correlationId
-    });
+    // Validate verify token
+    if (token !== verifyToken) {
+      logger.warn('Webhook verification failed: invalid verify token', { correlationId });
+      res.status(403).json({
+        ok: false,
+        code: 'FORBIDDEN',
+        message: 'Invalid verify token',
+        correlationId
+      });
+      return;
+    }
+
+    // Success
+    logger.info('Webhook verification successful', { correlationId });
+    res.status(200).type('text/plain').send(challenge ?? '');
   });
 
   const processor = createWebhookProcessor({
@@ -156,7 +167,8 @@ export function buildApp(): Express {
 
   app.post(
     '/webhook',
-    createSignatureValidationMiddleware(),
+    correlationIdMiddleware(),
+    signatureValidationMiddleware(),
     createExpressWebhookHandler(processor)
   );
 

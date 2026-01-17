@@ -368,7 +368,9 @@ describe('whatsapp app', () => {
       expect(response.status).toBe(403);
       expect(response.body.ok).toBe(false);
       expect(response.body.code).toBe('FORBIDDEN');
+      expect(response.body.message).toBe('Invalid hub.mode');
       expect(typeof response.body.correlationId).toBe('string');
+      expect(response.headers['x-correlation-id']).toBe(response.body.correlationId);
 
       logSpy.mockRestore();
     });
