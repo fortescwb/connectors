@@ -292,3 +292,23 @@ pnpm test
 **CI Behavior:**
 - When `CI=true`, integration tests **fail** if Redis container cannot start
 - Locally, tests are skipped with a warning if container is unavailable
+
+### Outbound exactly-once tests
+
+The outbound pipeline uses Redis for distributed dedupe and is covered by an integration test:
+
+```bash
+# Full suite (includes outbound)
+pnpm --filter @connectors/core-runtime test
+
+# Focus only on outbound exactly-once
+pnpm --filter @connectors/core-runtime test -- --grep "outbound runtime exactly-once"
+```
+
+Requirements:
+- Docker or Podman available for testcontainers
+- Redis image `redis:7-alpine` (override with `REDIS_TEST_IMAGE`)
+
+The test spins two runtime instances sharing Redis and asserts that two intents
+with the same `dedupeKey` trigger exactly one provider send while logging
+`correlationId` + `dedupeKey` per item.

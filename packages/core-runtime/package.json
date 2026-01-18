@@ -15,7 +15,8 @@
   },
   "dependencies": {
     "@connectors/core-connectors": "workspace:*",
-    "@connectors/core-logging": "workspace:*"
+    "@connectors/core-logging": "workspace:*",
+    "@connectors/core-messaging": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.10.6",
