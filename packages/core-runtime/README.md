@@ -224,3 +224,39 @@ interface SignatureResult {
 ```
 
 All responses include `x-correlation-id` header.
+
+## Security Guidelines
+
+### Logging & PII
+
+The runtime logs **only metadata**, never raw payloads:
+
+| Logged | NOT Logged |
+|--------|------------|
+| `correlationId` | `request.body` |
+| `capabilityId` | `event.payload` |
+| `dedupeKey` | Message content |
+| `outcome` | User data |
+| `latencyMs` | Phone numbers |
+| `errorCode` | Names, emails |
+
+**Handler responsibility:** When implementing handlers, **do not log `event.payload` directly**. Instead:
+
+```typescript
+// ❌ BAD - exposes PII
+ctx.logger.info('Processing message', { payload: event.payload });
+
+// ✅ GOOD - log only non-sensitive metadata
+ctx.logger.info('Processing message', { 
+  messageId: event.payload.id,
+  messageType: event.payload.type,
+  hasMedia: !!event.payload.media
+});
+```
+
+### Rate Limiting Behavior
+
+Rate limiter is called **once per batch** with `cost = events.length`:
+- Key: `tenant ?? manifest.id`
+- Scope: All events in batch share the same rate limit consumption
+- Result: 429 affects entire batch (no partial processing)
