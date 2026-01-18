@@ -19,6 +19,7 @@
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\""
   },
   "dependencies": {
+    "@connectors/core-messaging": "workspace:*",
     "@connectors/core-runtime": "workspace:*",
     "@connectors/core-validation": "workspace:*",
     "zod": "^3.22.4"
