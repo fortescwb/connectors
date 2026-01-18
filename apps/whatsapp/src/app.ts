@@ -1,17 +1,17 @@
 import express, { type Express } from 'express';
 
-import { parseEventEnvelope } from '@connectors/core-events';
 import { createLogger } from '@connectors/core-logging';
 import { rawBodyMiddleware, type RawBodyRequest } from '@connectors/adapter-express';
 import { verifyHmacSha256 } from '@connectors/core-signature';
 import {
   buildWebhookHandlers,
+  type ParsedEvent,
   type RuntimeRequest,
   type SignatureVerifier,
-  type ParsedEvent,
   type WebhookVerifyHandler
 } from '@connectors/core-runtime';
 import { capability, type ConnectorManifest } from '@connectors/core-connectors';
+import { parseWhatsAppRuntimeRequest } from '@connectors/core-meta-whatsapp';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MANIFEST
@@ -24,8 +24,8 @@ export const whatsappManifest: ConnectorManifest = {
   platform: 'meta',
   capabilities: [
     capability('inbound_messages', 'active', 'Receive messages via WhatsApp webhook'),
+    capability('message_status_updates', 'active', 'Receive message delivery status'),
     capability('outbound_messages', 'planned', 'Send messages via Graph API'),
-    capability('message_status_updates', 'planned', 'Receive message delivery status'),
     capability('webhook_verification', 'active', 'Meta webhook verification endpoint')
   ],
   webhookPath: '/webhook',
@@ -119,17 +119,7 @@ const verifyWebhook: WebhookVerifyHandler = (query) => {
 // EVENT PARSER
 // ─────────────────────────────────────────────────────────────────────────────
 
-function parseEvent(request: RuntimeRequest): ParsedEvent {
-  const envelope = parseEventEnvelope(request.body);
-
-  return {
-    capabilityId: 'inbound_messages',
-    dedupeKey: envelope.dedupeKey,
-    correlationId: envelope.correlationId,
-    tenant: envelope.tenantId,
-    payload: envelope
-  };
-}
+const parseEvents = (request: RuntimeRequest): ParsedEvent[] => parseWhatsAppRuntimeRequest(request);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // APP BUILDER
@@ -143,7 +133,7 @@ export function buildApp(): Express {
 
   // Health check
   app.get('/health', (_req, res) => {
-    res.status(200).json({ status: 'ok' });
+    res.status(200).json({ status: 'ok', connector: whatsappManifest.id });
   });
 
   // Build runtime handlers
@@ -151,12 +141,17 @@ export function buildApp(): Express {
     manifest: whatsappManifest,
     registry: {
       inbound_messages: async (event, ctx) => {
-        ctx.logger.info('Received webhook event', {
-          dedupeKey: (event as { dedupeKey?: string }).dedupeKey
+        ctx.logger.info('Inbound WhatsApp message handled', {
+          dedupeKey: ctx.dedupeKey
+        });
+      },
+      message_status_updates: async (_event, ctx) => {
+        ctx.logger.info('WhatsApp message status handled', {
+          dedupeKey: ctx.dedupeKey
         });
       }
     },
-    parseEvent,
+    parseEvents,
     verifyWebhook,
     signatureVerifier: createMetaSignatureVerifier(),
     logger
