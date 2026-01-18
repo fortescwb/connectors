@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ulidPattern = /^[0-9A-HJKMNP-TV-Z]{26}$/;
-const e164Pattern = /^\+?[1-9]\d{7,14}$/;
+const e164Pattern = /^\+[1-9]\d{7,14}$/;
 
 export const TextMessagePayloadSchema = z.object({
   type: z.literal('text'),

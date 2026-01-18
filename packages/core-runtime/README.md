@@ -309,6 +309,6 @@ Requirements:
 - Docker or Podman available for testcontainers
 - Redis image `redis:7-alpine` (override with `REDIS_TEST_IMAGE`)
 
-The test spins two runtime instances sharing Redis and asserts that two intents
-with the same `dedupeKey` trigger exactly one provider send while logging
-`correlationId` + `dedupeKey` per item.
+The test spins two runtime instances sharing Redis and asserts that when two intents
+with the same `dedupeKey` are processed concurrently by different runtime instances,
+they trigger exactly one provider send while logging `correlationId` + `dedupeKey` per item.
