@@ -60,18 +60,18 @@
 #### Segurança de Logs (PII/Payload)
 
 - [x] **Logs não expõem payloads brutos**: Runtime loga apenas metadados (`dedupeKey`, `capabilityId`, `outcome`, `latencyMs`, `errorCode`). Payloads ficam sob responsabilidade do handler.
-- [ ] **Guideline de logging para handlers**: Documentar que handlers NÃO devem logar `event.payload` diretamente, apenas campos não-sensíveis ou redacted.
+- [x] **Guideline de logging para handlers**: Documentado em `core-runtime/README.md` que handlers NÃO devem logar `event.payload` diretamente.
 
 #### Testes Cross-Instância (Dedupe)
 
 - [x] **InMemoryDedupeStore testado**: Cobre cenário single-instance.
-- [ ] **RedisDedupeStore teste de integração**: Adicionar teste com Redis real (ou testcontainers) que prove dedupe entre 2 "instâncias" simuladas.
+- [x] **RedisDedupeStore teste de integração**: Implementado com testcontainers - prova dedupe cross-instance, TTL expiry, e fail modes. Roda com Podman/Docker.
 
 #### Versionamento & Commits
 
 - [ ] **Semver rigoroso**: Qualquer mudança de contrato de resposta HTTP (campos, tipos) requer bump de major version.
 - [ ] **Commits atômicos**: Um commit = um tema. Separar runtime/apps/docs em PRs distintos quando possível.
-- [ ] **CHANGELOG.md**: Criar arquivo de changelog para rastrear evolução do contrato.
+- [x] **CHANGELOG.md**: Criado arquivo de changelog para rastrear evolução do contrato.
 
 ---
 

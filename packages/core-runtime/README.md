@@ -260,3 +260,35 @@ Rate limiter is called **once per batch** with `cost = events.length`:
 - Key: `tenant ?? manifest.id`
 - Scope: All events in batch share the same rate limit consumption
 - Result: 429 affects entire batch (no partial processing)
+
+## Testing
+
+### Unit Tests
+
+```bash
+pnpm test
+```
+
+### Integration Tests (Redis)
+
+Integration tests use [testcontainers](https://testcontainers.com/) to spin up a real Redis instance.
+
+**With Docker:**
+```bash
+pnpm test
+```
+
+**With Podman (Parrot OS, Fedora, etc.):**
+```bash
+# Enable Podman socket
+systemctl --user enable --now podman.socket
+
+# Run tests with Podman configuration
+DOCKER_HOST="unix://$XDG_RUNTIME_DIR/podman/podman.sock" \
+TESTCONTAINERS_RYUK_DISABLED=true \
+pnpm test
+```
+
+**CI Behavior:**
+- When `CI=true`, integration tests **fail** if Redis container cannot start
+- Locally, tests are skipped with a warning if container is unavailable
