@@ -1,0 +1,62 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "999999999",
+      "changes": [
+        {
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": {
+              "display_phone_number": "15550001234",
+              "phone_number_id": "441234567890"
+            },
+            "contacts": [
+              {
+                "profile": {
+                  "name": "Meta Test User"
+                },
+                "wa_id": "15551234567"
+              }
+            ],
+            "messages": [
+              {
+                "from": "15551234567",
+                "id": "wamid.MSG1.111111",
+                "timestamp": "1700000000",
+                "text": {
+                  "body": "Hello from WhatsApp"
+                },
+                "type": "text"
+              },
+              {
+                "from": "15551234567",
+                "id": "wamid.MSG2.222222",
+                "timestamp": "1700000001",
+                "type": "image",
+                "image": {
+                  "id": "MEDIA_ID_1",
+                  "mime_type": "image/jpeg",
+                  "sha256": "abc123imagehash",
+                  "caption": "Sample photo"
+                }
+              }
+            ],
+            "statuses": [
+              {
+                "id": "wamid.MSG1.111111",
+                "status": "delivered",
+                "timestamp": "1700000100",
+                "recipient_id": "15551234567",
+                "conversation": {
+                  "id": "CONV123"
+                }
+              }
+            ]
+          },
+          "field": "messages"
+        }
+      ]
+    }
+  ]
+}
