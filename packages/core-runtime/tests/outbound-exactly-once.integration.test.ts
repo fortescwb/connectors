@@ -89,17 +89,22 @@ const createMemoryLogger = (sink: LogEntry[]) => ({
   error: (message: string, extra?: Record<string, unknown>) => sink.push({ level: 'error', message, ...extra })
 });
 
-const makeIntent = (overrides: Partial<OutboundMessageIntent> = {}): OutboundMessageIntent => ({
-  intentId: randomUUID(),
-  tenantId: 'tenant-outbound',
-  provider: 'whatsapp',
-  to: '+15551234567',
-  payload: { type: 'text', text: 'hello world' },
-  dedupeKey: 'whatsapp:tenant-outbound:client-msg-1',
-  correlationId: randomUUID(),
-  createdAt: new Date().toISOString(),
-  ...overrides
-});
+const makeIntent = (overrides: Partial<OutboundMessageIntent> = {}): OutboundMessageIntent => {
+  const intentId = overrides.intentId ?? randomUUID();
+  const dedupeKey = overrides.dedupeKey ?? `whatsapp:tenant-outbound:${intentId}`;
+
+  return {
+    intentId,
+    tenantId: 'tenant-outbound',
+    provider: 'whatsapp',
+    to: '+15551234567',
+    payload: { type: 'text', text: 'hello world' },
+    dedupeKey,
+    correlationId: overrides.correlationId ?? randomUUID(),
+    createdAt: overrides.createdAt ?? new Date().toISOString(),
+    ...overrides
+  };
+};
 
 if (!redisSetup.ok) {
   if (IS_CI) {

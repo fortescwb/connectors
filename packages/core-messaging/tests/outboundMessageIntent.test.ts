@@ -68,4 +68,27 @@ describe('OutboundMessageIntentSchema', () => {
       })
     ).toThrow(/text must not be empty/);
   });
+
+  it('accepts valid previewUrl boolean values', () => {
+    const withPreviewTrue = OutboundMessageIntentSchema.parse({
+      ...baseIntent,
+      payload: { type: 'text' as const, text: 'Check this link', previewUrl: true }
+    });
+    expect(withPreviewTrue.payload.previewUrl).toBe(true);
+
+    const withPreviewFalse = OutboundMessageIntentSchema.parse({
+      ...baseIntent,
+      payload: { type: 'text' as const, text: 'Check this link', previewUrl: false }
+    });
+    expect(withPreviewFalse.payload.previewUrl).toBe(false);
+  });
+
+  it('rejects invalid previewUrl values (non-boolean)', () => {
+    expect(() =>
+      OutboundMessageIntentSchema.parse({
+        ...baseIntent,
+        payload: { type: 'text' as const, text: 'Check this link', previewUrl: 'yes' as never }
+      })
+    ).toThrow();
+  });
 });
