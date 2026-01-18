@@ -51,4 +51,58 @@ describe('parseWhatsAppWebhook', () => {
 
     expect(() => parseWhatsAppWebhook(payload)).toThrow(ValidationError);
   });
+
+  describe('status type parsing', () => {
+    it('parses status_sent fixture correctly', () => {
+      const payload = loadFixture('status_sent.json');
+
+      const events = parseWhatsAppWebhook(payload);
+
+      expect(events).toHaveLength(1);
+      expect(events[0]?.capabilityId).toBe('message_status_updates');
+      expect(events[0]?.dedupeKey).toBe('whatsapp:441234567890:status:wamid.STATUS.SENT.111:sent');
+
+      const statusPayload = events[0]?.payload as { status: { status: string } };
+      expect(statusPayload.status.status).toBe('sent');
+    });
+
+    it('parses status_read fixture correctly', () => {
+      const payload = loadFixture('status_read.json');
+
+      const events = parseWhatsAppWebhook(payload);
+
+      expect(events).toHaveLength(1);
+      expect(events[0]?.capabilityId).toBe('message_status_updates');
+      expect(events[0]?.dedupeKey).toBe('whatsapp:441234567890:status:wamid.STATUS.READ.111:read');
+
+      const statusPayload = events[0]?.payload as { status: { status: string } };
+      expect(statusPayload.status.status).toBe('read');
+    });
+
+    it('parses status_failed fixture with error details', () => {
+      const payload = loadFixture('status_failed.json');
+
+      const events = parseWhatsAppWebhook(payload);
+
+      expect(events).toHaveLength(1);
+      expect(events[0]?.capabilityId).toBe('message_status_updates');
+      expect(events[0]?.dedupeKey).toBe('whatsapp:441234567890:status:wamid.STATUS.FAILED.111:failed');
+
+      const statusPayload = events[0]?.payload as { status: { status: string; raw: { errors?: unknown[] } } };
+      expect(statusPayload.status.status).toBe('failed');
+      expect(statusPayload.status.raw.errors).toHaveLength(1);
+    });
+
+    it('parses delivered status from batch fixture', () => {
+      const payload = loadFixture('message_batch.json');
+
+      const events = parseWhatsAppWebhook(payload);
+      const deliveredEvent = events.find(
+        (e) => e.capabilityId === 'message_status_updates' && e.dedupeKey.includes(':delivered')
+      );
+
+      expect(deliveredEvent).toBeDefined();
+      expect(deliveredEvent?.dedupeKey).toBe('whatsapp:441234567890:status:wamid.MSG1.111111:delivered');
+    });
+  });
 });
