@@ -456,9 +456,23 @@ Referência rápida de padrões para replicar em novos conectores.
 
 ### HTTP Contract
 
-- **Response shape (sucesso):** `{ ok: true, fullyDeduped: boolean, correlationId: string }`
+- **Response shape (sucesso batch):**
+  ```json
+  {
+    "ok": true,
+    "fullyDeduped": false,
+    "correlationId": "mkiquc-abc123",
+    "summary": { "total": 3, "processed": 2, "deduped": 1, "failed": 0 },
+    "results": [
+      { "capabilityId": "inbound_messages", "dedupeKey": "k1", "ok": true, "deduped": false, "correlationId": "..." }
+    ]
+  }
+  ```
 - **Response shape (erro):** `{ ok: false, code: string, message: string, correlationId: string }`
-- **Códigos de erro padrão:** `WEBHOOK_VALIDATION_FAILED` (400), `UNAUTHORIZED` (401), `FORBIDDEN` (403), `SERVICE_UNAVAILABLE` (503), `INTERNAL_ERROR` (500)
+- **Campo `fullyDeduped`:** Boolean canônico — `true` apenas quando TODOS os itens foram dedupados
+- **Campo `summary.deduped`:** Número — contagem de itens dedupados
+- **Campo `results[].deduped`:** Boolean — status de dedupe por item
+- **Códigos de erro padrão:** `WEBHOOK_VALIDATION_FAILED` (400), `UNAUTHORIZED` (401), `FORBIDDEN` (403), `RATE_LIMIT_EXCEEDED` (429), `SERVICE_UNAVAILABLE` (503), `INTERNAL_ERROR` (500)
 - **Header obrigatório em todas as respostas:** `x-correlation-id`
 - **Content-Type:** `application/json` (POST), `text/plain` (GET verify)
 
@@ -532,21 +546,48 @@ Se o manifest declara `webhook.signature.requireRawBody: true` mas `req.rawBody`
 
 - **Formato:** JSON estruturado via `createLogger()` do `core-logging`
 - **Campos mínimos:** `service`, `correlationId`, `tenantId`, `eventId`, `eventType`, `dedupeKey`
+- **Campos por item (batch):** `capabilityId`, `dedupeKey`, `outcome`, `latencyMs`, `errorCode`
 - **Mensagens padrão:**
-  - `"Webhook event processed"` — sucesso
-  - `"Duplicate webhook event skipped"` — dedupe
+  - `"Event processed successfully"` — sucesso por item
+  - `"Duplicate event skipped"` — dedupe por item
   - `"Signature validation skipped"` — sem secret configurado
-  - `"Webhook validation failed"` — 400
-  - `"Unauthorized webhook request"` — 401
-  - `"Webhook handler failed"` — 500
+  - `"Event parsing failed"` — 400
+  - `"Signature verification failed"` — 401
+  - `"Handler execution failed"` — erro no handler
+
+### Logging & PII Security
+
+O runtime **nunca loga payloads brutos**. Campos logados:
+
+| ✅ Permitido | ❌ Proibido |
+|-------------|-------------|
+| `correlationId` | `request.body` |
+| `capabilityId` | `event.payload` |
+| `dedupeKey` | Conteúdo de mensagens |
+| `outcome` | Dados de usuário |
+| `latencyMs` | Telefones, emails |
+| `errorCode` | Nomes, endereços |
+
+**Responsabilidade do handler:** Ao implementar handlers, **não logue `event.payload` diretamente**:
+
+```typescript
+// ❌ RUIM - expõe PII
+ctx.logger.info('Processando', { payload: event.payload });
+
+// ✅ BOM - apenas metadados não-sensíveis
+ctx.logger.info('Processando', { 
+  messageId: event.payload.id,
+  messageType: event.payload.type 
+});
+```
 
 ### Testing Baseline
 
 - **Framework:** Vitest + Supertest
 - **Casos mínimos para cada conector:**
   1. Health check (`GET /health` → 200)
-  2. Payload válido → 200 com `deduped: false`
-  3. Payload duplicado → 200 com `deduped: true`
+  2. Payload válido → 200 com `fullyDeduped: false`
+  3. Payload duplicado → 200 com `fullyDeduped: true`
   4. Payload inválido → 400 com `WEBHOOK_VALIDATION_FAILED`
   5. Assinatura válida (com secret) → 200
   6. Assinatura inválida → 401 com `"Invalid signature"`
