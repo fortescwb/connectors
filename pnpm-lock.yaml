@@ -373,8 +373,30 @@ importers:
         specifier: 1.6.1
         version: 1.6.1(@types/node@20.19.30)
 
+  packages/core-messaging:
+    dependencies:
+      zod:
+        specifier: ^3.22.4
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^20.10.6
+        version: 20.19.30
+      prettier:
+        specifier: 3.8.0
+        version: 3.8.0
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 1.6.1
+        version: 1.6.1(@types/node@20.19.30)
+
   packages/core-meta-whatsapp:
     dependencies:
+      '@connectors/core-messaging':
+        specifier: workspace:*
+        version: link:../core-messaging
       '@connectors/core-runtime':
         specifier: workspace:*
         version: link:../core-runtime
@@ -421,6 +443,9 @@ importers:
       '@connectors/core-logging':
         specifier: workspace:*
         version: link:../core-logging
+      '@connectors/core-messaging':
+        specifier: workspace:*
+        version: link:../core-messaging
     devDependencies:
       '@types/node':
         specifier: ^20.10.6

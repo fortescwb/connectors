@@ -12,6 +12,7 @@
 
 import type { ConnectorManifest, CapabilityId } from '@connectors/core-connectors';
 import { createLogger, type Logger, type LoggerContext } from '@connectors/core-logging';
+import { DEFAULT_DEDUPE_TTL_MS } from './constants.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES: Requests and Responses
@@ -349,15 +350,6 @@ export interface WebhookHandlers {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CONSTANTS
-// ─────────────────────────────────────────────────────────────────────────────
-
-const DEFAULT_DEDUPE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-
-// ─────────────────────────────────────────────────────────────────────────────
-// UTILITIES
-// ─────────────────────────────────────────────────────────────────────────────
-
 /**
  * Generate a unique correlation ID.
  */
@@ -745,3 +737,15 @@ export {
   type RedisClient,
   type RedisDedupeStoreOptions
 } from './redis-dedupe-store.js';
+
+// Outbound runtime (exactly-once side-effects)
+export type {
+  OutboundBatchResult,
+  OutboundIntent,
+  OutboundItemResult,
+  OutboundItemStatus,
+  OutboundRuntimeOptions,
+  OutboundSendContext,
+  OutboundSendFn
+} from './outbound/types.js';
+export { processOutboundBatch } from './outbound/processOutboundBatch.js';
