@@ -184,12 +184,12 @@ importers:
       '@connectors/core-connectors':
         specifier: workspace:*
         version: link:../../packages/core-connectors
-      '@connectors/core-events':
-        specifier: workspace:*
-        version: link:../../packages/core-events
       '@connectors/core-logging':
         specifier: workspace:*
         version: link:../../packages/core-logging
+      '@connectors/core-meta-whatsapp':
+        specifier: workspace:*
+        version: link:../../packages/core-meta-whatsapp
       '@connectors/core-runtime':
         specifier: workspace:*
         version: link:../../packages/core-runtime
@@ -359,6 +359,31 @@ importers:
       '@connectors/core-tenant':
         specifier: workspace:*
         version: link:../core-tenant
+    devDependencies:
+      '@types/node':
+        specifier: ^20.10.6
+        version: 20.19.30
+      prettier:
+        specifier: 3.8.0
+        version: 3.8.0
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 1.6.1
+        version: 1.6.1(@types/node@20.19.30)
+
+  packages/core-meta-whatsapp:
+    dependencies:
+      '@connectors/core-runtime':
+        specifier: workspace:*
+        version: link:../core-runtime
+      '@connectors/core-validation':
+        specifier: workspace:*
+        version: link:../core-validation
+      zod:
+        specifier: ^3.22.4
+        version: 3.25.76
     devDependencies:
       '@types/node':
         specifier: ^20.10.6
