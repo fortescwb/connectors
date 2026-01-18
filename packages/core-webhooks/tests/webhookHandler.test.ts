@@ -69,16 +69,16 @@ describe('createWebhookProcessor', () => {
 
     // Validate response structure
     expect(first.status).toBe(200);
-    const firstBody = first.body as { ok: boolean; deduped: boolean; correlationId: string };
+    const firstBody = first.body as { ok: boolean; fullyDeduped: boolean; correlationId: string };
     expect(firstBody.ok).toBe(true);
-    expect(firstBody.deduped).toBe(false);
+    expect(firstBody.fullyDeduped).toBe(false);
     expect(typeof firstBody.correlationId).toBe('string');
     expect(first.headers?.['x-correlation-id']).toBe(firstBody.correlationId);
 
     expect(second.status).toBe(200);
-    const secondBody = second.body as { ok: boolean; deduped: boolean; correlationId: string };
+    const secondBody = second.body as { ok: boolean; fullyDeduped: boolean; correlationId: string };
     expect(secondBody.ok).toBe(true);
-    expect(secondBody.deduped).toBe(true);
+    expect(secondBody.fullyDeduped).toBe(true);
     expect(typeof secondBody.correlationId).toBe('string');
     expect(second.headers?.['x-correlation-id']).toBe(secondBody.correlationId);
 
@@ -133,10 +133,10 @@ describe('createWebhookProcessor', () => {
 
     // Both should process without deduplication
     expect(first.status).toBe(200);
-    expect((first.body as { deduped: boolean }).deduped).toBe(false);
+    expect((first.body as { fullyDeduped: boolean }).fullyDeduped).toBe(false);
 
     expect(second.status).toBe(200);
-    expect((second.body as { deduped: boolean }).deduped).toBe(false);
+    expect((second.body as { fullyDeduped: boolean }).fullyDeduped).toBe(false);
 
     // onEvent should be called twice
     expect(onEvent).toHaveBeenCalledTimes(2);

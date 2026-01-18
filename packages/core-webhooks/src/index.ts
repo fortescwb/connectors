@@ -129,7 +129,7 @@ export function createWebhookProcessor(options: WebhookOptions) {
         logger.info('Duplicate webhook event skipped', dedupeLogFields);
         return {
           status: 200,
-          body: { ok: true, deduped: true, correlationId },
+          body: { ok: true, fullyDeduped: true, correlationId },
           headers: responseHeaders
         };
       }
@@ -145,7 +145,7 @@ export function createWebhookProcessor(options: WebhookOptions) {
       logger.info('Webhook event processed', { ...dedupeLogFields, deduped: false });
       return {
         status: 200,
-        body: { ok: true, deduped: false, correlationId },
+        body: { ok: true, fullyDeduped: false, correlationId },
         headers: responseHeaders
       };
     } catch (error) {

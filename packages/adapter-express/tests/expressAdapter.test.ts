@@ -43,7 +43,7 @@ describe('adapter-express', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
-    expect(res.body.deduped).toBe(false);
+    expect(res.body.fullyDeduped).toBe(false);
     expect(typeof res.body.correlationId).toBe('string');
     expect(res.headers['x-correlation-id']).toBe(res.body.correlationId);
 
