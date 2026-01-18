@@ -44,6 +44,17 @@ const logger = createLogger({ service: 'whatsapp-app' });
 // SIGNATURE VERIFIER
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Creates a Meta webhook signature verifier using X-Hub-Signature-256.
+ *
+ * SECURITY NOTES:
+ * 1. rawBody is REQUIRED for signature verification - the HMAC is computed
+ *    over the raw request bytes, not the parsed JSON.
+ * 2. rawBodyMiddleware() MUST be applied BEFORE any JSON parsing middleware.
+ * 3. If rawBody is empty/missing, the runtime will return 500 (config error).
+ * 4. This function NEVER logs the request body or rawBody to avoid PII exposure.
+ * 5. Without WHATSAPP_WEBHOOK_SECRET, signature validation is skipped with a log.
+ */
 function createMetaSignatureVerifier(): SignatureVerifier {
   const secret = process.env.WHATSAPP_WEBHOOK_SECRET;
 
@@ -128,7 +139,16 @@ const parseEvents = (request: RuntimeRequest): ParsedEvent[] => parseWhatsAppRun
 export function buildApp(): Express {
   const app = express();
 
-  // Capture raw body for signature verification
+  // ─────────────────────────────────────────────────────────────────────────
+  // CRITICAL: rawBodyMiddleware MUST be first middleware
+  // ─────────────────────────────────────────────────────────────────────────
+  // This captures the raw request body as a Buffer BEFORE any JSON parsing.
+  // Meta signs the raw bytes of the webhook payload, so we need the original
+  // body to verify the X-Hub-Signature-256 header.
+  //
+  // If you add express.json() or any body parser BEFORE this middleware,
+  // signature verification will FAIL because rawBody will be empty.
+  // ─────────────────────────────────────────────────────────────────────────
   app.use(rawBodyMiddleware());
 
   // Health check
