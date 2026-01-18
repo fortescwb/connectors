@@ -428,7 +428,7 @@ describe('deduplication', () => {
   });
 
   describe('POST handler dedupe behavior', () => {
-    it('sets deduped=false on first request', async () => {
+    it('sets fullyDeduped=false on first request', async () => {
       const handler = createMockHandler();
       const registry: CapabilityRegistry = { inbound_messages: handler };
 
@@ -442,13 +442,13 @@ describe('deduplication', () => {
       const response = await handlePost(createMockRequest());
 
       expect(response.status).toBe(200);
-      const body = response.body as { ok: boolean; deduped: boolean };
+      const body = response.body as { ok: boolean; fullyDeduped: boolean };
       expect(body.ok).toBe(true);
-      expect(body.deduped).toBe(false);
+      expect(body.fullyDeduped).toBe(false);
       expect(handler).toHaveBeenCalledTimes(1);
     });
 
-    it('sets deduped=true and returns 200 on duplicate', async () => {
+    it('sets fullyDeduped=true and returns 200 on duplicate', async () => {
       const handler = createMockHandler();
       const registry: CapabilityRegistry = { inbound_messages: handler };
       const dedupeStore = new InMemoryDedupeStore();
@@ -467,9 +467,9 @@ describe('deduplication', () => {
       const response = await handlePost(createMockRequest());
 
       expect(response.status).toBe(200);
-      const body = response.body as { ok: boolean; deduped: boolean };
+      const body = response.body as { ok: boolean; fullyDeduped: boolean };
       expect(body.ok).toBe(true);
-      expect(body.deduped).toBe(true);
+      expect(body.fullyDeduped).toBe(true);
 
       // Handler should only be called once
       expect(handler).toHaveBeenCalledTimes(1);
@@ -759,7 +759,7 @@ describe('capability handlers', () => {
     expect(commentHandler).not.toHaveBeenCalled();
   });
 
-  it('returns 500 when no handler registered for capability', async () => {
+  it('flags missing handler as failure but does not throw 500', async () => {
     const { handlePost } = buildWebhookHandlers({
       manifest: testManifest,
       registry: {},
@@ -768,9 +768,10 @@ describe('capability handlers', () => {
 
     const response = await handlePost(createMockRequest());
 
-    expect(response.status).toBe(500);
-    const body = response.body as { message: string };
-    expect(body.message).toContain('No handler for capability');
+    expect(response.status).toBe(200);
+    const body = response.body as { summary: { failed: number; processed: number } };
+    expect(body.summary.failed).toBe(1);
+    expect(body.summary.processed).toBe(0);
   });
 
   it('passes event payload to handler', async () => {
@@ -820,7 +821,7 @@ describe('capability handlers', () => {
     );
   });
 
-  it('returns 500 when handler throws', async () => {
+  it('marks failure when handler throws but keeps batch 200', async () => {
     const handler = vi.fn().mockRejectedValue(new Error('Handler error'));
     const registry: CapabilityRegistry = { inbound_messages: handler };
 
@@ -832,10 +833,10 @@ describe('capability handlers', () => {
 
     const response = await handlePost(createMockRequest());
 
-    expect(response.status).toBe(500);
-    const body = response.body as { code: string; message: string };
-    expect(body.code).toBe('INTERNAL_ERROR');
-    expect(body.message).toBe('internal_error');
+    expect(response.status).toBe(200);
+    const body = response.body as { summary: { failed: number; processed: number } };
+    expect(body.summary.failed).toBe(1);
+    expect(body.summary.processed).toBe(0);
   });
 });
 

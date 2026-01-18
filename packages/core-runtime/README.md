@@ -28,11 +28,13 @@ const runtime = createConnectorRuntime({
       // Handle the message
     }
   },
-  parseEvent: (request) => ({
-    capabilityId: 'inbound_messages',
-    dedupeKey: `my-connector:${request.body.id}`,
-    payload: request.body
-  }),
+  parseEvents: (request) => [
+    {
+      capabilityId: 'inbound_messages',
+      dedupeKey: `my-connector:${request.body.id}`,
+      payload: request.body
+    }
+  ],
   verifyWebhook: (query) => {
     if (query['hub.verify_token'] === process.env.VERIFY_TOKEN) {
       return { success: true, challenge: query['hub.challenge'] };
@@ -74,7 +76,8 @@ Creates a runtime instance with GET and POST handlers.
 |--------|------|----------|-------------|
 | `manifest` | `ConnectorManifest` | Yes | Connector metadata and capabilities |
 | `registry` | `CapabilityRegistry` | Yes | Map of capability ID → handler function |
-| `parseEvent` | `EventParser` | Yes | Parse request into normalized event |
+| `parseEvents` | `EventBatchParser` | Preferred | Parse request into a batch of normalized events (processed item-by-item) |
+| `parseEvent` | `EventParser` | Compat | Legacy single-event parser (wrapped into a batch automatically) |
 | `verifyWebhook` | `WebhookVerifyHandler` | No | Handle GET verification requests |
 | `signatureVerifier` | `SignatureVerifier` | No | Verify request signatures (HMAC) |
 | `dedupeStore` | `DedupeStore` | No | Custom dedupe storage (default: in-memory) |
@@ -184,7 +187,7 @@ interface SignatureResult {
 
 | Status | Condition |
 |--------|-----------|
-| 200 | Success (includes `deduped: true/false`) |
+| 200 | Success (includes `summary` + `fullyDeduped`) |
 | 400 | Event parsing failed |
 | 401 | Signature verification failed |
 | 403 | Webhook verification failed |
@@ -196,8 +199,24 @@ interface SignatureResult {
 
 **Success:**
 ```json
-{ "ok": true, "deduped": false, "correlationId": "mkiquc-abc123" }
+{
+  "ok": true,
+  "fullyDeduped": false,
+  "correlationId": "mkiquc-abc123",
+  "summary": { "total": 3, "processed": 3, "deduped": 0, "failed": 0 },
+  "results": [
+    { "capabilityId": "inbound_messages", "dedupeKey": "k1", "ok": true, "deduped": false, "correlationId": "mkiquc-abc123" }
+  ]
+}
 ```
+
+**Response fields:**
+- `fullyDeduped` (boolean): `true` only when ALL items in the batch were deduplicated (no processing, no failures)
+- `summary.deduped` (number): Count of deduplicated items
+- `results[].deduped` (boolean): Per-item dedupe status
+- `results[].errorCode` (string): Error code when `ok: false` (`NO_HANDLER`, `HANDLER_FAILED`)
+
+> **Note:** Field names are unambiguous by design. `fullyDeduped` is always boolean (batch-level), `summary.deduped` is always number (count).
 
 **Error:**
 ```json
@@ -205,3 +224,39 @@ interface SignatureResult {
 ```
 
 All responses include `x-correlation-id` header.
+
+## Security Guidelines
+
+### Logging & PII
+
+The runtime logs **only metadata**, never raw payloads:
+
+| Logged | NOT Logged |
+|--------|------------|
+| `correlationId` | `request.body` |
+| `capabilityId` | `event.payload` |
+| `dedupeKey` | Message content |
+| `outcome` | User data |
+| `latencyMs` | Phone numbers |
+| `errorCode` | Names, emails |
+
+**Handler responsibility:** When implementing handlers, **do not log `event.payload` directly**. Instead:
+
+```typescript
+// ❌ BAD - exposes PII
+ctx.logger.info('Processing message', { payload: event.payload });
+
+// ✅ GOOD - log only non-sensitive metadata
+ctx.logger.info('Processing message', { 
+  messageId: event.payload.id,
+  messageType: event.payload.type,
+  hasMedia: !!event.payload.media
+});
+```
+
+### Rate Limiting Behavior
+
+Rate limiter is called **once per batch** with `cost = events.length`:
+- Key: `tenant ?? manifest.id`
+- Scope: All events in batch share the same rate limit consumption
+- Result: 429 affects entire batch (no partial processing)

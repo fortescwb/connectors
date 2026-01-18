@@ -43,8 +43,15 @@ export interface RuntimeResponse {
  */
 export interface SuccessResponseBody {
   ok: true;
-  deduped: boolean;
   correlationId: string;
+  /**
+   * True only when ALL items in the batch were deduplicated (no processing, no failures).
+   * For per-item status, see results[].deduped (boolean).
+   * For count, see summary.deduped (number).
+   */
+  fullyDeduped: boolean;
+  summary: BatchSummary;
+  results?: BatchItemResult[];
 }
 
 /**
@@ -55,6 +62,29 @@ export interface ErrorResponseBody {
   code: string;
   message: string;
   correlationId: string;
+}
+
+/**
+ * Per-item result returned in batch responses.
+ */
+export interface BatchItemResult {
+  capabilityId: CapabilityId;
+  dedupeKey: string;
+  ok: boolean;
+  deduped: boolean;
+  correlationId: string;
+  latencyMs?: number;
+  errorCode?: string;
+}
+
+/**
+ * Summary of batch processing.
+ */
+export interface BatchSummary {
+  total: number;
+  processed: number;
+  deduped: number;
+  failed: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -69,6 +99,8 @@ export interface RuntimeContext {
   connector: string;
   tenant?: string;
   deduped: boolean;
+  dedupeKey: string;
+  capabilityId: CapabilityId;
   logger: Logger;
 }
 
@@ -222,6 +254,13 @@ export type EventParser<TPayload = unknown> = (
   request: RuntimeRequest
 ) => ParsedEvent<TPayload> | Promise<ParsedEvent<TPayload>>;
 
+/**
+ * Batch event parser function (preferred).
+ */
+export type EventBatchParser<TPayload = unknown> = (
+  request: RuntimeRequest
+) => ParsedEvent<TPayload>[] | Promise<ParsedEvent<TPayload>[]>;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES: Webhook Verification (GET)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -255,9 +294,14 @@ export interface RuntimeConfig<TPayload = unknown> {
   registry: CapabilityRegistry;
 
   /**
-   * Parse incoming request into a normalized event.
+   * Parse incoming request into a normalized batch of events (preferred).
    */
-  parseEvent: EventParser<TPayload>;
+  parseEvents?: EventBatchParser<TPayload>;
+
+  /**
+   * Legacy single-event parser (deprecated, kept for compatibility).
+   */
+  parseEvent?: EventParser<TPayload>;
 
   /**
    * Handle GET verification requests.
@@ -361,12 +405,23 @@ function errorResponse(
 }
 
 /**
- * Create a success response.
+ * Create a batch success response with summary.
  */
-function successResponse(correlationId: string, deduped: boolean): RuntimeResponse {
+function successBatchResponse(
+  correlationId: string,
+  summary: BatchSummary,
+  results?: BatchItemResult[]
+): RuntimeResponse {
+  const fullyDeduped = summary.total > 0 && summary.deduped === summary.total && summary.failed === 0 && summary.processed === 0;
   return {
     status: 200,
-    body: { ok: true, deduped, correlationId } satisfies SuccessResponseBody,
+    body: {
+      ok: true,
+      fullyDeduped,
+      correlationId,
+      summary,
+      ...(results && results.length > 0 ? { results } : {})
+    } satisfies SuccessResponseBody,
     headers: buildResponseHeaders(correlationId)
   };
 }
@@ -405,13 +460,30 @@ export function buildWebhookHandlers<TPayload = unknown>(
   const {
     manifest,
     registry,
+    parseEvents,
     parseEvent,
     verifyWebhook,
     signatureVerifier,
     dedupeStore = new InMemoryDedupeStore(),
     dedupeTtlMs = DEFAULT_DEDUPE_TTL_MS,
-    rateLimiter
+    rateLimiter,
+    logger
   } = config;
+
+  const baseLogContext: LoggerContext = { service: manifest.id, connector: manifest.id };
+  const buildScopedLogger = (context: LoggerContext): Logger => {
+    const merged = { ...baseLogContext, ...context };
+
+    if (logger) {
+      return {
+        info: (message, extra) => logger.info(message, { ...merged, ...extra }),
+        warn: (message, extra) => logger.warn(message, { ...merged, ...extra }),
+        error: (message, extra) => logger.error(message, { ...merged, ...extra })
+      };
+    }
+
+    return createLogger(merged);
+  };
 
   // ─────────────────────────────────────────────────────────────────────────
   // GET Handler (Webhook Verification)
@@ -420,14 +492,10 @@ export function buildWebhookHandlers<TPayload = unknown>(
   const handleGet = async (request: RuntimeRequest): Promise<RuntimeResponse> => {
     // GET always generates new correlationId (ignores header per contract)
     const correlationId = generateCorrelationId();
-    const logger = createLogger({
-      service: manifest.id,
-      correlationId,
-      connector: manifest.id
-    } as LoggerContext);
+    const scopedLogger = buildScopedLogger({ correlationId });
 
     if (!verifyWebhook) {
-      logger.error('Webhook verification handler not configured');
+      scopedLogger.error('Webhook verification handler not configured');
       return errorResponse(503, 'SERVICE_UNAVAILABLE', 'Webhook verification not configured', correlationId);
     }
 
@@ -435,7 +503,7 @@ export function buildWebhookHandlers<TPayload = unknown>(
       const result = await verifyWebhook(request.query);
 
       if (result.success) {
-        logger.info('Webhook verification successful');
+        scopedLogger.info('Webhook verification successful');
         return {
           status: 200,
           body: result.challenge ?? '',
@@ -445,11 +513,11 @@ export function buildWebhookHandlers<TPayload = unknown>(
       }
 
       const status = result.errorCode === 'SERVICE_UNAVAILABLE' ? 503 : 403;
-      logger.warn('Webhook verification failed', { code: result.errorCode });
+      scopedLogger.warn('Webhook verification failed', { code: result.errorCode });
       return errorResponse(status, result.errorCode ?? 'FORBIDDEN', result.errorMessage ?? 'Verification failed', correlationId);
     } catch (error) {
       const err = error as Error;
-      logger.error('Webhook verification error', { error: err.message });
+      scopedLogger.error('Webhook verification error', { error: err.message });
       return errorResponse(500, 'INTERNAL_ERROR', 'internal_error', correlationId);
     }
   };
@@ -459,19 +527,26 @@ export function buildWebhookHandlers<TPayload = unknown>(
   // ─────────────────────────────────────────────────────────────────────────
 
   const handlePost = async (request: RuntimeRequest): Promise<RuntimeResponse> => {
-    // Step 1: Determine correlationId (fallback for early errors)
     const headerCorrelationId = extractCorrelationIdFromHeaders(request.headers);
     const fallbackCorrelationId = headerCorrelationId ?? generateCorrelationId();
+    const parser = async () => {
+      if (parseEvents) {
+        return parseEvents(request);
+      }
+      if (parseEvent) {
+        const single = await parseEvent(request);
+        return [single];
+      }
+      throw new Error('No parser configured (parseEvents or parseEvent required)');
+    };
+    const buildErrorLogger = (correlationId: string, tenant?: string) =>
+      buildScopedLogger({ correlationId, ...(tenant && { tenantId: tenant }) } as LoggerContext);
 
-    // Step 2: Validate rawBody requirement for signature
+    // Step 1: Validate rawBody requirement for signature
     if (signatureVerifier?.enabled) {
       if (!request.rawBody) {
-        const logger = createLogger({
-          service: manifest.id,
-          correlationId: fallbackCorrelationId,
-          connector: manifest.id
-        } as LoggerContext);
-        logger.error('rawBody required for signature verification but not provided');
+        const scopedLogger = buildErrorLogger(fallbackCorrelationId);
+        scopedLogger.error('rawBody required for signature verification but not provided');
         return errorResponse(
           500,
           'INTERNAL_ERROR',
@@ -480,56 +555,52 @@ export function buildWebhookHandlers<TPayload = unknown>(
         );
       }
 
-      // Step 3: Verify signature
+      // Step 2: Verify signature (once per request)
       const signatureResult = await signatureVerifier.verify(request);
       if (!signatureResult.valid) {
-        const logger = createLogger({
-          service: manifest.id,
-          correlationId: fallbackCorrelationId,
-          connector: manifest.id
-        } as LoggerContext);
-        // Log only metadata, not payload, when signature fails
-        logger.warn('Signature verification failed', { code: signatureResult.code });
+        const scopedLogger = buildErrorLogger(fallbackCorrelationId);
+        scopedLogger.warn('Signature verification failed', { code: signatureResult.code });
         return errorResponse(401, 'UNAUTHORIZED', 'Invalid signature', fallbackCorrelationId);
       }
     }
 
-    // Step 4: Parse event
-    let event: ParsedEvent<TPayload>;
+    // Step 3: Parse batch of events
+    let events: ParsedEvent<TPayload>[];
     try {
-      event = await parseEvent(request);
+      const parsed = await parser();
+      events = Array.isArray(parsed) ? parsed : [parsed];
     } catch (error) {
       const err = error as Error;
-      const logger = createLogger({
-        service: manifest.id,
-        correlationId: fallbackCorrelationId,
-        connector: manifest.id
-      } as LoggerContext);
-      logger.warn('Event parsing failed', { error: err.message });
-      return errorResponse(400, 'WEBHOOK_VALIDATION_FAILED', err.message, fallbackCorrelationId);
+      const scopedLogger = buildErrorLogger(fallbackCorrelationId);
+      scopedLogger.warn('Event parsing failed', { error: err.message });
+      const statusCode = err.message.includes('No parser configured') ? 500 : 400;
+      const code = statusCode === 500 ? 'INTERNAL_ERROR' : 'WEBHOOK_VALIDATION_FAILED';
+      return errorResponse(statusCode, code, err.message, fallbackCorrelationId);
     }
 
-    // Step 5: Determine final correlationId (event > header > generated)
-    const correlationId = event.correlationId ?? fallbackCorrelationId;
+    if (events.length === 0) {
+      const scopedLogger = buildErrorLogger(fallbackCorrelationId);
+      scopedLogger.warn('Event parsing returned empty batch');
+      return errorResponse(400, 'WEBHOOK_VALIDATION_FAILED', 'No events parsed from request', fallbackCorrelationId);
+    }
 
-    const logger = createLogger({
-      service: manifest.id,
-      correlationId,
-      connector: manifest.id,
-      ...(event.tenant && { tenantId: event.tenant })
-    } as LoggerContext);
+    // Step 4: Determine final correlationId (batch-level)
+    const correlationId = events[0]?.correlationId ?? fallbackCorrelationId;
+    const summary: BatchSummary = { total: events.length, processed: 0, deduped: 0, failed: 0 };
+    const results: BatchItemResult[] = [];
 
-    // Step 6: Rate limiting
+    // Step 5: Rate limiting (once per request, cost = batch size)
     if (rateLimiter) {
-      const rateLimitKey = event.tenant ?? manifest.id;
-      const rateLimitResult = await rateLimiter.consume(rateLimitKey);
+      const rateLimitKey = events[0]?.tenant ?? manifest.id;
+      const rateLimitResult = await rateLimiter.consume(rateLimitKey, events.length);
 
       if (!rateLimitResult.allowed) {
         const retryAfterSeconds = rateLimitResult.retryAfterMs
           ? Math.ceil(rateLimitResult.retryAfterMs / 1000)
           : 60;
 
-        logger.warn('Rate limit exceeded', { retryAfterSeconds });
+        const scopedLogger = buildErrorLogger(correlationId, events[0]?.tenant);
+        scopedLogger.warn('Rate limit exceeded', { retryAfterSeconds });
         return {
           status: 429,
           body: {
@@ -546,38 +617,116 @@ export function buildWebhookHandlers<TPayload = unknown>(
       }
     }
 
-    // Step 7: Deduplication
-    const isDuplicate = await dedupeStore.checkAndMark(event.dedupeKey, dedupeTtlMs);
+    // Step 6: Process each event sequentially for deterministic logging
+    for (const event of events) {
+      const eventCorrelationId = event.correlationId ?? correlationId;
+      const eventLogger = buildScopedLogger({
+        correlationId: eventCorrelationId,
+        capabilityId: event.capabilityId,
+        ...(event.tenant && { tenantId: event.tenant })
+      } as LoggerContext);
+      const ctx: RuntimeContext = {
+        correlationId: eventCorrelationId,
+        connector: manifest.id,
+        tenant: event.tenant,
+        deduped: false,
+        dedupeKey: event.dedupeKey,
+        capabilityId: event.capabilityId,
+        logger: eventLogger
+      };
 
-    const ctx: RuntimeContext = {
-      correlationId,
-      connector: manifest.id,
-      tenant: event.tenant,
-      deduped: isDuplicate,
-      logger
-    };
+      const handler = registry[event.capabilityId];
+      const startedAt = Date.now();
 
-    if (isDuplicate) {
-      logger.info('Duplicate event skipped', { dedupeKey: event.dedupeKey, deduped: true });
-      return successResponse(correlationId, true);
+      const isDuplicate = await dedupeStore.checkAndMark(event.dedupeKey, dedupeTtlMs);
+
+      if (isDuplicate) {
+        const latencyMs = Date.now() - startedAt;
+        summary.deduped += 1;
+        ctx.deduped = true;
+        eventLogger.info('Duplicate event skipped', {
+          dedupeKey: event.dedupeKey,
+          deduped: true,
+          outcome: 'deduped',
+          latencyMs
+        });
+        results.push({
+          capabilityId: event.capabilityId,
+          dedupeKey: event.dedupeKey,
+          ok: true,
+          deduped: true,
+          correlationId: eventCorrelationId,
+          latencyMs
+        });
+        continue;
+      }
+
+      if (!handler) {
+        const latencyMs = Date.now() - startedAt;
+        summary.failed += 1;
+        eventLogger.warn('No handler registered for capability', {
+          capabilityId: event.capabilityId,
+          dedupeKey: event.dedupeKey,
+          deduped: false,
+          outcome: 'failed',
+          errorCode: 'NO_HANDLER',
+          latencyMs
+        });
+        results.push({
+          capabilityId: event.capabilityId,
+          dedupeKey: event.dedupeKey,
+          ok: false,
+          deduped: false,
+          correlationId: eventCorrelationId,
+          latencyMs,
+          errorCode: 'NO_HANDLER'
+        });
+        continue;
+      }
+
+      try {
+        await handler(event.payload, ctx);
+        const latencyMs = Date.now() - startedAt;
+        summary.processed += 1;
+        eventLogger.info('Event processed successfully', {
+          dedupeKey: event.dedupeKey,
+          deduped: false,
+          outcome: 'processed',
+          latencyMs
+        });
+        results.push({
+          capabilityId: event.capabilityId,
+          dedupeKey: event.dedupeKey,
+          ok: true,
+          deduped: false,
+          correlationId: eventCorrelationId,
+          latencyMs
+        });
+      } catch (error) {
+        const err = error as Error;
+        const latencyMs = Date.now() - startedAt;
+        summary.failed += 1;
+        eventLogger.error('Handler execution failed', {
+          error: err.message,
+          dedupeKey: event.dedupeKey,
+          deduped: false,
+          outcome: 'failed',
+          latencyMs
+        });
+        results.push({
+          capabilityId: event.capabilityId,
+          dedupeKey: event.dedupeKey,
+          ok: false,
+          deduped: false,
+          correlationId: eventCorrelationId,
+          latencyMs,
+          errorCode: 'HANDLER_FAILED'
+        });
+      }
     }
 
-    // Step 8: Find and execute handler
-    const handler = registry[event.capabilityId];
-    if (!handler) {
-      logger.error('No handler registered for capability', { capabilityId: event.capabilityId });
-      return errorResponse(500, 'INTERNAL_ERROR', `No handler for capability: ${event.capabilityId}`, correlationId);
-    }
-
-    try {
-      await handler(event.payload, ctx);
-      logger.info('Event processed successfully', { dedupeKey: event.dedupeKey, deduped: false });
-      return successResponse(correlationId, false);
-    } catch (error) {
-      const err = error as Error;
-      logger.error('Handler execution failed', { error: err.message, stack: err.stack });
-      return errorResponse(500, 'INTERNAL_ERROR', 'internal_error', correlationId);
-    }
+    // Always return 200 for a valid batch, even with partial failures
+    return successBatchResponse(correlationId, summary, results);
   };
 
   return { handleGet, handlePost };

@@ -60,7 +60,7 @@ describe('instagram app', () => {
       logSpy.mockRestore();
     });
 
-    it('accepts valid webhook payload with deduped:false and correlationId', async () => {
+    it('accepts valid webhook payload with fullyDeduped:false and correlationId', async () => {
       const app = buildApp();
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
       const envelope = makeConversationMessageReceived({
@@ -81,7 +81,7 @@ describe('instagram app', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.ok).toBe(true);
-      expect(response.body.deduped).toBe(false);
+      expect(response.body.fullyDeduped).toBe(false);
       expect(typeof response.body.correlationId).toBe('string');
       expect(response.headers['x-correlation-id']).toBe(response.body.correlationId);
 

@@ -1,17 +1,17 @@
 import express, { type Express } from 'express';
 
-import { parseEventEnvelope } from '@connectors/core-events';
 import { createLogger } from '@connectors/core-logging';
 import { rawBodyMiddleware, type RawBodyRequest } from '@connectors/adapter-express';
 import { verifyHmacSha256 } from '@connectors/core-signature';
 import {
   buildWebhookHandlers,
+  type ParsedEvent,
   type RuntimeRequest,
   type SignatureVerifier,
-  type ParsedEvent,
   type WebhookVerifyHandler
 } from '@connectors/core-runtime';
 import { capability, type ConnectorManifest } from '@connectors/core-connectors';
+import { parseWhatsAppRuntimeRequest } from '@connectors/core-meta-whatsapp';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MANIFEST
@@ -24,8 +24,8 @@ export const whatsappManifest: ConnectorManifest = {
   platform: 'meta',
   capabilities: [
     capability('inbound_messages', 'active', 'Receive messages via WhatsApp webhook'),
+    capability('message_status_updates', 'active', 'Receive message delivery status'),
     capability('outbound_messages', 'planned', 'Send messages via Graph API'),
-    capability('message_status_updates', 'planned', 'Receive message delivery status'),
     capability('webhook_verification', 'active', 'Meta webhook verification endpoint')
   ],
   webhookPath: '/webhook',
@@ -44,6 +44,17 @@ const logger = createLogger({ service: 'whatsapp-app' });
 // SIGNATURE VERIFIER
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Creates a Meta webhook signature verifier using X-Hub-Signature-256.
+ *
+ * SECURITY NOTES:
+ * 1. rawBody is REQUIRED for signature verification - the HMAC is computed
+ *    over the raw request bytes, not the parsed JSON.
+ * 2. rawBodyMiddleware() MUST be applied BEFORE any JSON parsing middleware.
+ * 3. If rawBody is empty/missing, the runtime will return 500 (config error).
+ * 4. This function NEVER logs the request body or rawBody to avoid PII exposure.
+ * 5. Without WHATSAPP_WEBHOOK_SECRET, signature validation is skipped with a log.
+ */
 function createMetaSignatureVerifier(): SignatureVerifier {
   const secret = process.env.WHATSAPP_WEBHOOK_SECRET;
 
@@ -119,17 +130,7 @@ const verifyWebhook: WebhookVerifyHandler = (query) => {
 // EVENT PARSER
 // ─────────────────────────────────────────────────────────────────────────────
 
-function parseEvent(request: RuntimeRequest): ParsedEvent {
-  const envelope = parseEventEnvelope(request.body);
-
-  return {
-    capabilityId: 'inbound_messages',
-    dedupeKey: envelope.dedupeKey,
-    correlationId: envelope.correlationId,
-    tenant: envelope.tenantId,
-    payload: envelope
-  };
-}
+const parseEvents = (request: RuntimeRequest): ParsedEvent[] => parseWhatsAppRuntimeRequest(request);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // APP BUILDER
@@ -138,12 +139,21 @@ function parseEvent(request: RuntimeRequest): ParsedEvent {
 export function buildApp(): Express {
   const app = express();
 
-  // Capture raw body for signature verification
+  // ─────────────────────────────────────────────────────────────────────────
+  // CRITICAL: rawBodyMiddleware MUST be first middleware
+  // ─────────────────────────────────────────────────────────────────────────
+  // This captures the raw request body as a Buffer BEFORE any JSON parsing.
+  // Meta signs the raw bytes of the webhook payload, so we need the original
+  // body to verify the X-Hub-Signature-256 header.
+  //
+  // If you add express.json() or any body parser BEFORE this middleware,
+  // signature verification will FAIL because rawBody will be empty.
+  // ─────────────────────────────────────────────────────────────────────────
   app.use(rawBodyMiddleware());
 
   // Health check
   app.get('/health', (_req, res) => {
-    res.status(200).json({ status: 'ok' });
+    res.status(200).json({ status: 'ok', connector: whatsappManifest.id });
   });
 
   // Build runtime handlers
@@ -151,12 +161,17 @@ export function buildApp(): Express {
     manifest: whatsappManifest,
     registry: {
       inbound_messages: async (event, ctx) => {
-        ctx.logger.info('Received webhook event', {
-          dedupeKey: (event as { dedupeKey?: string }).dedupeKey
+        ctx.logger.info('Inbound WhatsApp message handled', {
+          dedupeKey: ctx.dedupeKey
+        });
+      },
+      message_status_updates: async (_event, ctx) => {
+        ctx.logger.info('WhatsApp message status handled', {
+          dedupeKey: ctx.dedupeKey
         });
       }
     },
-    parseEvent,
+    parseEvents,
     verifyWebhook,
     signatureVerifier: createMetaSignatureVerifier(),
     logger

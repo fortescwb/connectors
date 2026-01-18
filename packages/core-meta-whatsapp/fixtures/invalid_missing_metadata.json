@@ -1,0 +1,26 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "999999999",
+      "changes": [
+        {
+          "field": "messages",
+          "value": {
+            "messaging_product": "whatsapp",
+            "messages": [
+              {
+                "id": "wamid.INVALID.999",
+                "timestamp": "1700000300",
+                "text": {
+                  "body": "Missing metadata should fail"
+                },
+                "type": "text"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

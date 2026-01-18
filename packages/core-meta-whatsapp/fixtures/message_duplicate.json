@@ -1,0 +1,39 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "999999999",
+      "changes": [
+        {
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": {
+              "display_phone_number": "15550001234",
+              "phone_number_id": "441234567890"
+            },
+            "contacts": [
+              {
+                "profile": {
+                  "name": "Meta Test User"
+                },
+                "wa_id": "15551234567"
+              }
+            ],
+            "messages": [
+              {
+                "from": "15551234567",
+                "id": "wamid.DUPLICATE.123",
+                "timestamp": "1700000200",
+                "text": {
+                  "body": "This will be treated as duplicate across requests"
+                },
+                "type": "text"
+              }
+            ]
+          },
+          "field": "messages"
+        }
+      ]
+    }
+  ]
+}

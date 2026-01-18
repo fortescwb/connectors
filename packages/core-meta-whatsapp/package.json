@@ -1,11 +1,16 @@
 {
-  "name": "@connectors/core-webhooks",
-  "version": "0.2.0",
+  "name": "@connectors/core-meta-whatsapp",
+  "version": "0.1.0",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./fixtures/*": "./fixtures/*"
+  },
   "files": [
-    "dist"
+    "dist",
+    "fixtures"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -14,9 +19,9 @@
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\""
   },
   "dependencies": {
-    "@connectors/core-events": "workspace:*",
-    "@connectors/core-logging": "workspace:*",
-    "@connectors/core-validation": "workspace:*"
+    "@connectors/core-runtime": "workspace:*",
+    "@connectors/core-validation": "workspace:*",
+    "zod": "^3.22.4"
   },
   "devDependencies": {
     "@types/node": "^20.10.6",
