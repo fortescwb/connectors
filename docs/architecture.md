@@ -385,8 +385,40 @@ Endpoint principal para receber webhooks do Meta/WhatsApp.
 
 - **Ambientes distribuídos:**
   - `InMemoryDedupeStore` é adequado para instância única ou testes.
-  - Para deploy multi-instância (Kubernetes, ECS, etc.), implemente `DedupeStore` com backend persistente (Redis, DynamoDB, PostgreSQL).
+  - Para deploy multi-instância (Kubernetes, ECS, etc.), use `RedisDedupeStore` ou implemente `DedupeStore` com outro backend persistente.
   - O TTL deve ser configurado de acordo com a janela de retry do Meta (recomendado: 5-15 minutos).
+
+### Deduplicação Distribuída
+
+O `RedisDedupeStore` fornece deduplicação persistente para ambientes multi-instância:
+
+```typescript
+import { createRedisDedupeStore } from '@connectors/core-runtime';
+import Redis from 'ioredis';
+
+const redis = new Redis(process.env.REDIS_URL);
+const dedupeStore = createRedisDedupeStore(redis, {
+  keyPrefix: 'dedupe:whatsapp:',  // Prefixo para isolar por conector
+  failMode: 'closed',            // 'open' = bloqueia em erro, 'closed' = permite
+  onError: (err) => logger.error('Redis dedupe error', { error: err }),
+});
+
+const app = buildWebhookApp({
+  manifest: whatsappManifest,
+  parseEvent,
+  dedupeStore,        // Substitui o InMemoryDedupeStore padrão
+  dedupeTtlMs: 600000, // 10 minutos
+});
+```
+
+**Fail Modes:**
+- `open` (default): Trata erros de Redis como duplicata → bloqueia o evento (seguro, evita reprocessamento)
+- `closed`: Trata erros como não-duplicata → permite o evento (disponibilidade, risco de reprocessar)
+
+**Interface `RedisClient`:**
+Compatível com `ioredis` e `node-redis`. Requer apenas:
+- `set(key, value, 'PX', ttlMs, 'NX'): Promise<'OK' | null>`
+- `quit(): Promise<unknown>`
 
 ### Variáveis de ambiente
 
@@ -424,7 +456,7 @@ Referência rápida de padrões para replicar em novos conectores.
 
 ### HTTP Contract
 
-- **Response shape (sucesso):** `{ ok: true, deduped: boolean, correlationId: string }`
+- **Response shape (sucesso):** `{ ok: true, fullyDeduped: boolean, correlationId: string }`
 - **Response shape (erro):** `{ ok: false, code: string, message: string, correlationId: string }`
 - **Códigos de erro padrão:** `WEBHOOK_VALIDATION_FAILED` (400), `UNAUTHORIZED` (401), `FORBIDDEN` (403), `SERVICE_UNAVAILABLE` (503), `INTERNAL_ERROR` (500)
 - **Header obrigatório em todas as respostas:** `x-correlation-id`

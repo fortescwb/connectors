@@ -11,6 +11,8 @@ Connectors monorepo para canais integrados ao Pyloto CRM. Cada app em `apps/*` �
 Conectores deployáveis que usam o runtime unificado:
 - `apps/whatsapp`: conector WhatsApp Business (webhook + health)
 - `apps/instagram`: conector Instagram/Meta (comentários, leads, mensagens)
+- `apps/calendar`: scaffold para calendários (Google Calendar, Apple Calendar) — *planned*
+- `apps/automation`: scaffold para iPaaS (Zapier, Make) — *planned*
 
 ### Runtime e Contratos (`packages/*`)
 - **`core-runtime`**: runtime unificado — correlationId, assinatura, dedupe, rate-limit, logging
@@ -63,6 +65,11 @@ pnpm lint    # ESLint flat config
 
 Prioridades do próximo ciclo (detalhes em [`TODO_list.md`](./TODO_list.md)):
 
-1. **DedupeStore persistente** — implementar Redis/DB para ambientes distribuídos
-2. **Conectores de calendário e automação** — Google Calendar, Zapier/Make
+1. **Integrar provedores reais** — Google Calendar, Zapier/Make nos scaffolds existentes
+2. **Novos domínios** — `core-messaging` (DMs) e `core-reactions` (likes/emojis)
 3. **Publicação de pacotes** — registry npm privado para `@connectors/core-*`
+
+### Concluído recentemente
+- ✅ `RedisDedupeStore` para ambientes distribuídos ([docs](./docs/architecture.md#deduplicação-distribuída))
+- ✅ Scaffolds `apps/calendar` e `apps/automation`
+- ✅ Limpeza de código (variáveis não utilizadas)
