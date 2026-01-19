@@ -13,6 +13,7 @@
 import type { ConnectorManifest, CapabilityId } from '@connectors/core-connectors';
 import { createLogger, type Logger, type LoggerContext } from '@connectors/core-logging';
 import { DEFAULT_DEDUPE_TTL_MS } from './constants.js';
+import { emitMetric, computeLatencyMs, type ObservabilityMetric } from './observability/utils.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES: Requests and Responses
@@ -357,6 +358,11 @@ export function generateCorrelationId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 11)}`;
 }
 
+// RuntimeMetric is now imported as ObservabilityMetric from observability/utils.ts
+type RuntimeMetric = ObservabilityMetric;
+
+// emitMetric and computeLatencyMs are now imported from observability/utils.ts
+
 /**
  * Extract correlationId from headers.
  */
@@ -578,6 +584,10 @@ export function buildWebhookHandlers<TPayload = unknown>(
 
     // Step 4: Determine final correlationId (batch-level)
     const correlationId = events[0]?.correlationId ?? fallbackCorrelationId;
+    const summaryCapabilityId =
+      events.length > 0 && events.every((evt) => evt.capabilityId === events[0]?.capabilityId)
+        ? events[0]!.capabilityId
+        : 'mixed';
     const summary: BatchSummary = { total: events.length, processed: 0, deduped: 0, failed: 0 };
     const results: BatchItemResult[] = [];
 
@@ -615,6 +625,7 @@ export function buildWebhookHandlers<TPayload = unknown>(
       const eventLogger = buildScopedLogger({
         correlationId: eventCorrelationId,
         capabilityId: event.capabilityId,
+        dedupeKey: event.dedupeKey,
         ...(event.tenant && { tenantId: event.tenant })
       } as LoggerContext);
       const ctx: RuntimeContext = {
@@ -630,10 +641,12 @@ export function buildWebhookHandlers<TPayload = unknown>(
       const handler = registry[event.capabilityId];
       const startedAt = Date.now();
 
+      emitMetric(eventLogger, 'webhook_received_total', 1, { outcome: 'received' });
+
       const isDuplicate = await dedupeStore.checkAndMark(event.dedupeKey, dedupeTtlMs);
 
       if (isDuplicate) {
-        const latencyMs = Date.now() - startedAt;
+        const latencyMs = computeLatencyMs(startedAt);
         summary.deduped += 1;
         ctx.deduped = true;
         eventLogger.info('Duplicate event skipped', {
@@ -642,6 +655,8 @@ export function buildWebhookHandlers<TPayload = unknown>(
           outcome: 'deduped',
           latencyMs
         });
+        emitMetric(eventLogger, 'event_deduped_total', 1, { outcome: 'deduped', latencyMs });
+        emitMetric(eventLogger, 'handler_latency_ms', latencyMs, { outcome: 'deduped' });
         results.push({
           capabilityId: event.capabilityId,
           dedupeKey: event.dedupeKey,
@@ -654,16 +669,20 @@ export function buildWebhookHandlers<TPayload = unknown>(
       }
 
       if (!handler) {
-        const latencyMs = Date.now() - startedAt;
+        const latencyMs = computeLatencyMs(startedAt);
         summary.failed += 1;
         eventLogger.warn('No handler registered for capability', {
-          capabilityId: event.capabilityId,
-          dedupeKey: event.dedupeKey,
           deduped: false,
           outcome: 'failed',
           errorCode: 'NO_HANDLER',
           latencyMs
         });
+        emitMetric(eventLogger, 'event_failed_total', 1, {
+          outcome: 'failed',
+          errorCode: 'NO_HANDLER',
+          latencyMs
+        });
+        emitMetric(eventLogger, 'handler_latency_ms', latencyMs, { outcome: 'failed' });
         results.push({
           capabilityId: event.capabilityId,
           dedupeKey: event.dedupeKey,
@@ -678,7 +697,7 @@ export function buildWebhookHandlers<TPayload = unknown>(
 
       try {
         await handler(event.payload, ctx);
-        const latencyMs = Date.now() - startedAt;
+        const latencyMs = computeLatencyMs(startedAt);
         summary.processed += 1;
         eventLogger.info('Event processed successfully', {
           dedupeKey: event.dedupeKey,
@@ -686,6 +705,8 @@ export function buildWebhookHandlers<TPayload = unknown>(
           outcome: 'processed',
           latencyMs
         });
+        emitMetric(eventLogger, 'event_processed_total', 1, { outcome: 'processed', latencyMs });
+        emitMetric(eventLogger, 'handler_latency_ms', latencyMs, { outcome: 'processed' });
         results.push({
           capabilityId: event.capabilityId,
           dedupeKey: event.dedupeKey,
@@ -696,15 +717,22 @@ export function buildWebhookHandlers<TPayload = unknown>(
         });
       } catch (error) {
         const err = error as Error;
-        const latencyMs = Date.now() - startedAt;
+        const latencyMs = computeLatencyMs(startedAt);
         summary.failed += 1;
         eventLogger.error('Handler execution failed', {
           error: err.message,
           dedupeKey: event.dedupeKey,
           deduped: false,
           outcome: 'failed',
+          latencyMs,
+          errorCode: 'HANDLER_FAILED'
+        });
+        emitMetric(eventLogger, 'event_failed_total', 1, {
+          outcome: 'failed',
+          errorCode: 'HANDLER_FAILED',
           latencyMs
         });
+        emitMetric(eventLogger, 'handler_latency_ms', latencyMs, { outcome: 'failed' });
         results.push({
           capabilityId: event.capabilityId,
           dedupeKey: event.dedupeKey,
@@ -716,6 +744,23 @@ export function buildWebhookHandlers<TPayload = unknown>(
         });
       }
     }
+
+    const summaryLogger = buildScopedLogger({ correlationId, capabilityId: summaryCapabilityId } as LoggerContext);
+    summaryLogger.info('Inbound batch summary', {
+      metric: 'event_batch_summary',
+      outcome: 'summary',
+      capabilityId: summaryCapabilityId,
+      total: summary.total,
+      processed: summary.processed,
+      deduped: summary.deduped,
+      failed: summary.failed
+    });
+    emitMetric(summaryLogger, 'event_batch_summary', summary.total, {
+      capabilityId: summaryCapabilityId,
+      processed: summary.processed,
+      deduped: summary.deduped,
+      failed: summary.failed
+    });
 
     // Always return 200 for a valid batch, even with partial failures
     return successBatchResponse(correlationId, summary, results);

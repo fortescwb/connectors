@@ -225,6 +225,48 @@ interface SignatureResult {
 
 All responses include `x-correlation-id` header.
 
+## Observability (minimum)
+
+### Structured logs
+
+Runtime-emitted logs are structured JSON. Every item-level log produced by the runtime (dedupe, success, failure) includes:
+
+- `service` / `connector` (connector id)
+- `capabilityId`
+- `tenantId`
+- `correlationId`
+- `dedupeKey`
+- `outcome` (`processed` | `deduped` | `failed` | `sent`)
+- `latencyMs`
+- optional `errorCode`, `upstreamStatus`
+
+Handlers receive `ctx.logger` pre-scoped with `service`, `connector`, `capabilityId`, `tenantId`, `correlationId`, and `dedupeKey` so custom logs stay correlated. Example runtime log:
+
+```json
+{"level":"info","message":"Event processed successfully","service":"whatsapp","connector":"whatsapp","capabilityId":"inbound_messages","tenantId":"tenant-1","correlationId":"corr-123","dedupeKey":"whatsapp:pnid:msg123","outcome":"processed","latencyMs":42}
+```
+
+### Metrics (log-based)
+
+Metrics are emitted as logs (`message: "metric"`) to stay Prometheus-ready via log scraping:
+
+- `webhook_received_total`: per inbound item parsed
+- `event_processed_total`: per processed/sent item
+- `event_deduped_total`: per deduped item
+- `event_failed_total`: per handler/send failure
+- `handler_latency_ms`: per item with `latencyMs`
+- `event_batch_summary`: once per batch with totals
+
+Outbound metrics also include `upstreamStatus` when available from the provider response/error. Example metric log:
+
+```json
+{"level":"info","message":"metric","service":"whatsapp","connector":"whatsapp","capabilityId":"outbound_messages","correlationId":"corr-abc","dedupeKey":"whatsapp:tenant:client1","metric":"event_processed_total","outcome":"sent","latencyMs":35,"upstreamStatus":200}
+```
+
+Dedupe is logged (and metrics emitted) before any side-effect. Batch summaries include `total`, `processed`, `deduped`, and `failed` to give an aggregate view.
+
+For outbound exactly-once, the default log dimensions are `service="core-runtime"`, `connector=<provider>`, `capabilityId="outbound_messages"`. Override them when needed via `processOutboundBatch` options `serviceName`, `connectorId`, and `capabilityId`.
+
 ## Security Guidelines
 
 ### Logging & PII
@@ -237,8 +279,10 @@ The runtime logs **only metadata**, never raw payloads:
 | `capabilityId` | `event.payload` |
 | `dedupeKey` | Message content |
 | `outcome` | User data |
-| `latencyMs` | Phone numbers |
+| `latencyMs` | Unmasked phone numbers |
 | `errorCode` | Names, emails |
+
+Outbound helpers emit a masked destination (`toMasked`) instead of the raw `to` value. Provider responses must **not** be logged directly; if you need status codes, use the `upstreamStatus` field extracted from the HTTP response/error.
 
 **Handler responsibility:** When implementing handlers, **do not log `event.payload` directly**. Instead:
 
