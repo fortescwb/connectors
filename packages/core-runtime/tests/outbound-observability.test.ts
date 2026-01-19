@@ -97,6 +97,6 @@ describe('processOutboundBatch observability', () => {
 
     const latencyMetrics = logs.filter((log) => log['metric'] === 'handler_latency_ms');
     expect(latencyMetrics).toHaveLength(3);
-    expect(latencyMetrics.every((log) => typeof log['latencyMs'] === 'number')).toBe(true);
+    expect(latencyMetrics.every((log) => typeof log['value'] === 'number')).toBe(true);
   });
 });

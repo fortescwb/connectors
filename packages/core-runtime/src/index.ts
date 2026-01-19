@@ -666,7 +666,7 @@ export function buildWebhookHandlers<TPayload = unknown>(
           latencyMs
         });
         emitMetric(eventLogger, 'event_deduped_total', 1, { outcome: 'deduped', latencyMs });
-        emitMetric(eventLogger, 'handler_latency_ms', latencyMs, { outcome: 'deduped', latencyMs });
+        emitMetric(eventLogger, 'handler_latency_ms', latencyMs, { outcome: 'deduped' });
         results.push({
           capabilityId: event.capabilityId,
           dedupeKey: event.dedupeKey,
@@ -692,7 +692,7 @@ export function buildWebhookHandlers<TPayload = unknown>(
           errorCode: 'NO_HANDLER',
           latencyMs
         });
-        emitMetric(eventLogger, 'handler_latency_ms', latencyMs, { outcome: 'failed', latencyMs });
+        emitMetric(eventLogger, 'handler_latency_ms', latencyMs, { outcome: 'failed' });
         results.push({
           capabilityId: event.capabilityId,
           dedupeKey: event.dedupeKey,
@@ -716,7 +716,7 @@ export function buildWebhookHandlers<TPayload = unknown>(
           latencyMs
         });
         emitMetric(eventLogger, 'event_processed_total', 1, { outcome: 'processed', latencyMs });
-        emitMetric(eventLogger, 'handler_latency_ms', latencyMs, { outcome: 'processed', latencyMs });
+        emitMetric(eventLogger, 'handler_latency_ms', latencyMs, { outcome: 'processed' });
         results.push({
           capabilityId: event.capabilityId,
           dedupeKey: event.dedupeKey,
@@ -742,7 +742,7 @@ export function buildWebhookHandlers<TPayload = unknown>(
           errorCode: 'HANDLER_FAILED',
           latencyMs
         });
-        emitMetric(eventLogger, 'handler_latency_ms', latencyMs, { outcome: 'failed', latencyMs });
+        emitMetric(eventLogger, 'handler_latency_ms', latencyMs, { outcome: 'failed' });
         results.push({
           capabilityId: event.capabilityId,
           dedupeKey: event.dedupeKey,
