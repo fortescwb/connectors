@@ -4,6 +4,8 @@ import { InMemoryDedupeStore } from '@connectors/core-runtime';
 
 import { sendCommentReplyBatch } from '../src/index.js';
 
+const sharedDedupeStore = new InMemoryDedupeStore();
+
 function createHttpClient({ status = 200, body = { id: 'reply_1' } } = {}) {
   const fn = vi.fn(async () =>
     new Response(JSON.stringify(body), {
@@ -17,7 +19,6 @@ function createHttpClient({ status = 200, body = { id: 'reply_1' } } = {}) {
 describe('sendCommentReplyBatch', () => {
   it('sends a reply with dedupe and returns reply id', async () => {
     const httpClient = createHttpClient();
-    const dedupeStore = new InMemoryDedupeStore();
     const results = await sendCommentReplyBatch(
       [
         {
@@ -31,7 +32,7 @@ describe('sendCommentReplyBatch', () => {
       {
         accessToken: 'token',
         httpClient,
-        dedupeStore,
+        dedupeStore: sharedDedupeStore,
         apiBaseUrl: 'https://graph.facebook.com/v19.0'
       }
     );
@@ -43,7 +44,6 @@ describe('sendCommentReplyBatch', () => {
 
   it('dedupes repeated command and does not send twice', async () => {
     const httpClient = createHttpClient();
-    const dedupeStore = new InMemoryDedupeStore();
     const command = {
       externalCommentId: '1789_comment_dup',
       externalPostId: '1789_post',
@@ -55,17 +55,18 @@ describe('sendCommentReplyBatch', () => {
     const first = await sendCommentReplyBatch([command], {
       accessToken: 'token',
       httpClient,
-      dedupeStore,
+      dedupeStore: sharedDedupeStore,
       apiBaseUrl: 'https://graph.facebook.com/v19.0'
     });
     const second = await sendCommentReplyBatch([command], {
       accessToken: 'token',
       httpClient,
-      dedupeStore,
+      dedupeStore: sharedDedupeStore,
       apiBaseUrl: 'https://graph.facebook.com/v19.0'
     });
 
     expect(first[0].success).toBe(true);
+    expect(first[0].errorCode).toBeUndefined();
     expect(second[0].success).toBe(true);
     expect(second[0].errorCode).toBe('deduped');
     expect(httpClient).toHaveBeenCalledTimes(1);
@@ -91,6 +92,7 @@ describe('sendCommentReplyBatch', () => {
       {
         accessToken: 'token',
         httpClient,
+        dedupeStore: sharedDedupeStore,
         apiBaseUrl: 'https://graph.facebook.com/v19.0'
       }
     );
@@ -118,6 +120,7 @@ describe('sendCommentReplyBatch', () => {
       {
         accessToken: 'token',
         httpClient,
+        dedupeStore: sharedDedupeStore,
         retry: { attempts: 2, backoffMs: 10 },
         apiBaseUrl: 'https://graph.facebook.com/v19.0'
       }
@@ -126,5 +129,29 @@ describe('sendCommentReplyBatch', () => {
     expect(results[0].success).toBe(false);
     expect(results[0].errorCode).toBe('timeout');
     expect(httpClient).toHaveBeenCalledTimes(2);
+  });
+
+  it('throws when dedupeStore is missing to prevent unsafe outbound use', async () => {
+    const httpClient = createHttpClient();
+
+    // @ts-expect-error intentional: validating runtime guard when dedupeStore is omitted
+    await expect(
+      sendCommentReplyBatch(
+        [
+          {
+            externalCommentId: '1789_comment_missing_store',
+            externalPostId: '1789_post_missing_store',
+            platform: 'instagram',
+            content: { type: 'text', text: 'Missing store' },
+            tenantId: 'tenant-1'
+          }
+        ],
+        {
+          accessToken: 'token',
+          httpClient,
+          apiBaseUrl: 'https://graph.facebook.com/v19.0'
+        }
+      )
+    ).rejects.toThrow(/dedupeStore is required/);
   });
 });

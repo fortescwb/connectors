@@ -29,7 +29,7 @@ const events = parseInstagramRuntimeRequest(runtimeRequest);
 
 - **Client**: `sendCommentReplyBatch()` - Send comment replies via Graph API v19.0
 - **Retry**: Configurable retry with exponential backoff (default: 3 attempts, 200ms base)
-- **Dedupe**: Dedupe check before HTTP call (prevents duplicate sends)
+- **Dedupe**: Caller-provided dedupe store; dedupe check happens before any HTTP call
 - **Error Classification**: `client_error`, `retry_exhausted`, `timeout`, `network_error`
 - **Tests**: Unit tests for success, dedupe, retry, and timeout scenarios
 
@@ -38,6 +38,7 @@ const events = parseInstagramRuntimeRequest(runtimeRequest);
 ```typescript
 import { sendCommentReplyBatch } from '@connectors/core-meta-instagram';
 
+// Caller MUST provide a dedupeStore (runtime-managed). InMemoryDedupeStore is dev/single-process only.
 const results = await sendCommentReplyBatch(
   [
     {
@@ -56,6 +57,15 @@ const results = await sendCommentReplyBatch(
   }
 );
 ```
+
+### Outbound Dedupe & fullyDeduped Semantics
+
+- `dedupeStore` is **required**; the client will throw if it is omitted to avoid unsafe side-effects.
+- `InMemoryDedupeStore` is acceptable for local development or single-process tests only.
+- Production usage must wire a shared store (e.g., Redis) so dedupe survives retries, crashes, and multiple instances.
+- The client alone does **not** guarantee exactly-once; that property comes from `core-runtime` + a shared `dedupeStore`.
+- `fullyDeduped` is computed by the runtime using the provided store; the client simply respects the dedupe decision before sending.
+- No implicit DedupeStore is created inside the client—callers must inject a real store from the runtime/app layer.
 
 **⚠️ IMPORTANT - Idempotency Key:**
 

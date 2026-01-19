@@ -1,5 +1,5 @@
 import { createLogger, type Logger } from '@connectors/core-logging';
-import { InMemoryDedupeStore, type DedupeStore } from '@connectors/core-runtime';
+import { type DedupeStore } from '@connectors/core-runtime';
 import { buildCommentReplyDedupeKey, CommentReplyCommandSchema, type CommentReplyCommand } from '@connectors/core-comments';
 import crypto from 'node:crypto';
 
@@ -10,7 +10,7 @@ export interface HttpClient {
 export interface SendCommentReplyBatchOptions {
   accessToken: string;
   httpClient?: HttpClient;
-  dedupeStore?: DedupeStore;
+  dedupeStore: DedupeStore;
   dedupeTtlMs?: number;
   logger?: Logger;
   apiBaseUrl?: string;
@@ -113,9 +113,13 @@ export async function sendCommentReplyBatch(
   commands: CommentReplyCommand[],
   options: SendCommentReplyBatchOptions
 ): Promise<SendCommentReplyResult[]> {
+  if (!options.dedupeStore) {
+    throw new Error('dedupeStore is required for outbound side-effects to preserve exactly-once semantics');
+  }
+
   const httpClient = options.httpClient ?? fetch;
   const apiBaseUrl = options.apiBaseUrl ?? 'https://graph.facebook.com/v19.0';
-  const dedupeStore = options.dedupeStore ?? new InMemoryDedupeStore();
+  const dedupeStore = options.dedupeStore;
   const dedupeTtlMs = options.dedupeTtlMs ?? 24 * 60 * 60 * 1000;
   const logger = options.logger ?? createLogger({ service: 'core-meta-instagram', component: 'comment-reply' });
 
