@@ -9,10 +9,12 @@ Connectors monorepo para canais integrados ao Pyloto CRM. Cada app em `apps/*` �
 
 ### Apps (`apps/*`)
 Conectores deployáveis que usam o runtime unificado:
-- `apps/whatsapp`: conector WhatsApp Business — **active** (inbound, status, webhook verification)
-- `apps/instagram`: conector Instagram Business — **active** (inbound_messages, webhook_verification)
+- `apps/whatsapp`: conector WhatsApp Business — **active** (inbound, status, webhook verification); `outbound_messages` ainda *planned*; produção requer dedupe store compartilhado (ex.: Redis).
+- `apps/instagram`: conector Instagram Business — **active** (inbound_messages, webhook_verification); `comment_reply` é *planned* (library only, não wired no app); demais capabilities *planned*; produção requer dedupe store compartilhado.
 - `apps/calendar`: scaffold para calendários (Google Calendar, Apple Calendar) — *planned*
 - `apps/automation`: scaffold para iPaaS (Zapier, Make) — *planned*
+
+> Nota: Status `active` não implica prontidão de produção; ver rubric em `TODO_list.md`. Use dedupe store compartilhado para evitar duplicidades em ambientes multi-instância.
 
 ### Runtime e Contratos (`packages/*`)
 - **`core-runtime`**: runtime unificado — correlationId, assinatura, dedupe, rate-limit, logging

@@ -12,8 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **core-meta-instagram**: New package with Zod schemas for Meta Instagram webhook payloads
 - **core-meta-instagram**: Real webhook fixtures (text message, media message, batch)
 - **core-meta-instagram**: `parseInstagramRuntimeRequest()` for batch-safe DM parsing
-- **core-meta-instagram**: `sendCommentReplyBatch()` client library (not yet wired in app)
-- **core-meta-instagram**: Comment reply client with retry/backoff and dedupe support
+- **core-meta-instagram**: `sendCommentReplyBatch()` client library (capability remains `planned`/library-only; not wired in app)
+- **core-meta-instagram**: Comment reply client with retry/backoff and caller-provided dedupe support (no end-to-end exactly-once; production requires shared dedupe store)
 - **apps/instagram**: Real Instagram DM parsing (replaces fake `parseEventEnvelope`)
 - **apps/instagram**: `inbound_messages` capability promoted to `active`
 - **apps/instagram**: Comprehensive integration tests with real fixtures

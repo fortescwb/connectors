@@ -31,9 +31,11 @@ Cada conector declara suas capabilities em um `ConnectorManifest`. Capabilities 
 | `webhook_verification` | Endpoint de verificação do provedor |
 
 Cada capability tem um status:
-- **`active`**: Implementado e funcional
-- **`planned`**: Na roadmap, ainda não implementado
-- **`disabled`**: Implementado mas desativado
+- **`active`**: Implementado e funcional conforme evidência (fixtures reais + testes + logging por item). Pode ainda depender de store compartilhado para produção.
+- **`planned`**: Na roadmap, ainda não implementado ou somente biblioteca não wired no app.
+- **`disabled`**: Implementado mas desativado.
+
+> Rubric detalhado de prontidão (planned/scaffold/active/beta/prod) está em `TODO_list.md` (fonte canônica de Sprint-0). `active` ≠ produção sem dedupe store compartilhado.
 
 ### Eventos Normalizados
 
@@ -74,6 +76,13 @@ Comandos são ações que o sistema envia para conectores executarem:
 | `core-rate-limit` | Rate limiting e backoff | active |
 | `core-messaging` | Tipos outbound implementados; DMs inbound planned | **partial** |
 | `core-reactions` | Reações (likes, emojis) em posts/comentários | **planned** |
+
+### Pacotes de Provedores
+
+| Pacote | Uso | Estado atual |
+|--------|-----|--------------|
+| `core-meta-whatsapp` | Parsing de webhooks do WhatsApp Business, fixtures reais e testes de batch/dedupe | ativo e usado em `apps/whatsapp` |
+| `core-meta-instagram` | Parsing de webhooks de Instagram DM; cliente de reply de comentário (library only, não wired) | inbound DM ativo; `comment_reply` permanece *planned* |
 
 ---
 
@@ -184,9 +193,13 @@ export const instagramManifest: ConnectorManifest = {
   version: '0.1.0',
   platform: 'meta',
   capabilities: [
-    capability('inbound_messages', 'active', 'Receive DMs via webhook'),
+    capability(
+      'inbound_messages',
+      'active',
+      'Receive DMs via webhook (production requires shared dedupe store)'
+    ),
     capability('comment_ingest', 'planned', 'Receive comments on posts'),
-    capability('comment_reply', 'planned', 'Reply to comments via API'),
+    capability('comment_reply', 'planned', 'Reply to comments via API (library only, not wired)'),
     capability('ads_leads_ingest', 'planned', 'Receive leads from Lead Ads'),
     capability('webhook_verification', 'active', 'Meta webhook verification'),
   ],
@@ -208,9 +221,13 @@ export const instagramManifestWithAuth: ConnectorManifest = {
   version: '0.2.0',
   platform: 'meta',
   capabilities: [
-    capability('inbound_messages', 'planned', 'Receive DMs via webhook'),
+    capability(
+      'inbound_messages',
+      'active',
+      'Receive DMs via webhook (production requires shared dedupe store)'
+    ),
     capability('comment_ingest', 'planned', 'Receive comments on posts'),
-    capability('comment_reply', 'planned', 'Reply to comments via API'),
+    capability('comment_reply', 'planned', 'Reply to comments via API (library only, not wired)'),
     capability('ads_leads_ingest', 'planned', 'Receive leads from Lead Ads'),
     capability('webhook_verification', 'active', 'Meta webhook verification'),
   ],
@@ -255,8 +272,8 @@ export const instagramManifestWithAuth: ConnectorManifest = {
 import { hasCapability } from '@connectors/core-connectors';
 import { instagramManifest } from './manifest.js';
 
-if (hasCapability(instagramManifest, 'comment_reply', 'active')) {
-  // Registrar rota de reply
+if (hasCapability(instagramManifest, 'inbound_messages', 'active')) {
+  // Registrar handler inbound (já wired no app)
 }
 ```
 
