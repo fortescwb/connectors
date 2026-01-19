@@ -6,8 +6,7 @@ import {
   buildWebhookHandlers,
   type CapabilityRegistry,
   type ParsedEvent,
-  type RuntimeRequest,
-  type SuccessResponseBody
+  type RuntimeRequest
 } from '../src/index.js';
 
 type LogEntry = Record<string, unknown>;

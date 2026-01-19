@@ -3,9 +3,10 @@ import express, { type Express } from 'express';
 import { createLogger } from '@connectors/core-logging';
 import { rawBodyMiddleware, type RawBodyRequest } from '@connectors/adapter-express';
 import { verifyHmacSha256 } from '@connectors/core-signature';
-import { parseInstagramRuntimeRequest } from '@connectors/core-meta-instagram';
+import { parseInstagramRuntimeRequest, type InstagramMessageNormalized } from '@connectors/core-meta-instagram';
 import {
   buildWebhookHandlers,
+  type CapabilityHandler,
   type RuntimeRequest,
   type SignatureVerifier,
   type WebhookVerifyHandler
@@ -106,6 +107,13 @@ const parseEvents = (request: RuntimeRequest) => parseInstagramRuntimeRequest(re
 
 export function buildApp(): Express {
   const app = express();
+  const inboundMessagesHandler: CapabilityHandler = async (event, ctx) => {
+    const payload = event as InstagramMessageNormalized;
+    ctx.logger.info('Received Instagram DM', {
+      mid: payload.mid,
+      sender: payload.senderId
+    });
+  };
 
   // Capture raw body for signature verification
   app.use(rawBodyMiddleware());
@@ -119,12 +127,7 @@ export function buildApp(): Express {
   const { handleGet, handlePost } = buildWebhookHandlers({
     manifest: instagramManifest,
     registry: {
-      inbound_messages: async (event, ctx) => {
-        ctx.logger.info('Received Instagram DM', {
-          mid: (event as any).mid,
-          sender: (event as any).senderId
-        });
-      }
+      inbound_messages: inboundMessagesHandler
     },
     parseEvents,
     verifyWebhook,

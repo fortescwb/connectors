@@ -17,13 +17,11 @@ import {
   emitCounter,
   emitHistogram,
   emitSummary,
-  emitMetric,
   computeLatencyMs,
   resolveConnectorForItem,
   COUNTER_METRICS,
   HISTOGRAM_METRICS,
-  SUMMARY_METRICS,
-  type ObservabilityMetric
+  SUMMARY_METRICS
 } from './observability/utils.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -374,11 +372,6 @@ export interface WebhookHandlers {
 export function generateCorrelationId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 11)}`;
 }
-
-// RuntimeMetric is now imported as ObservabilityMetric from observability/utils.ts
-type RuntimeMetric = ObservabilityMetric;
-
-// emitMetric and computeLatencyMs are now imported from observability/utils.ts
 
 /**
  * Extract correlationId from headers.
@@ -850,17 +843,19 @@ export {
   resolveConnectorForItem,
   COUNTER_METRICS,
   HISTOGRAM_METRICS,
-  SUMMARY_METRICS,
-  type ObservabilityMetric,
-  type CounterMetricName,
-  type HistogramMetricName,
-  type SummaryMetricName,
-  type CounterLabels,
-  type HistogramLabels,
-  type SummaryLabels,
-  type ConnectorId,
-  type ConnectorResolution,
-  type ConnectorResolutionOptions
+  SUMMARY_METRICS
+} from './observability/utils.js';
+export type {
+  ObservabilityMetric,
+  CounterMetricName,
+  HistogramMetricName,
+  SummaryMetricName,
+  CounterLabels,
+  HistogramLabels,
+  SummaryLabels,
+  ConnectorId,
+  ConnectorResolution,
+  ConnectorResolutionOptions
 } from './observability/utils.js';
 
 // Re-export Redis DedupeStore for distributed environments

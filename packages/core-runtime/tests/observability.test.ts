@@ -1,6 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
-
-import type { Logger } from '@connectors/core-logging';
+import { describe, expect, it } from 'vitest';
 
 import {
   emitCounter,
