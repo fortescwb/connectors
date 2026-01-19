@@ -15,7 +15,7 @@ export const instagramManifest: ConnectorManifest = {
 
   capabilities: [
     // Messaging (Instagram Direct)
-    capability('inbound_messages', 'planned', 'Receive DMs via Instagram webhook'),
+    capability('inbound_messages', 'active', 'Receive DMs via Instagram webhook'),
     capability('outbound_messages', 'planned', 'Send DMs via Graph API'),
     capability('message_status_updates', 'planned', 'Receive message delivery status'),
 

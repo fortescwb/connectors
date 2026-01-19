@@ -1,0 +1,125 @@
+# @connectors/core-meta-instagram
+
+Instagram/Meta webhook parsing and Graph API client library.
+
+## Features
+
+### ✅ Instagram DM Inbound (Active)
+
+- **Parser**: `parseInstagramRuntimeRequest()` - Batch-safe parsing of Instagram webhook payloads
+- **Fixtures**: Real webhook examples in `fixtures/`
+- **Schema**: Zod validation for Meta Instagram webhook structure
+- **Dedupe**: Deterministic dedupe key format: `instagram:{recipientId}:msg:{mid}`
+- **Tests**: Unit tests covering single messages, media, batches, and invalid payloads
+
+**Usage:**
+
+```typescript
+import { parseInstagramRuntimeRequest } from '@connectors/core-meta-instagram';
+
+const events = parseInstagramRuntimeRequest(runtimeRequest);
+// Returns: ParsedEvent<InstagramMessageNormalized>[]
+```
+
+**Wiring Status**: Fully integrated in `apps/instagram` with end-to-end tests.
+
+---
+
+### 🚧 Instagram Comment Reply (Library Only)
+
+- **Client**: `sendCommentReplyBatch()` - Send comment replies via Graph API v19.0
+- **Retry**: Configurable retry with exponential backoff (default: 3 attempts, 200ms base)
+- **Dedupe**: Dedupe check before HTTP call (prevents duplicate sends)
+- **Error Classification**: `client_error`, `retry_exhausted`, `timeout`, `network_error`
+- **Tests**: Unit tests for success, dedupe, retry, and timeout scenarios
+
+**Usage:**
+
+```typescript
+import { sendCommentReplyBatch } from '@connectors/core-meta-instagram';
+
+const results = await sendCommentReplyBatch(
+  [
+    {
+      externalCommentId: 'comment_123',
+      externalPostId: 'post_456',
+      platform: 'instagram',
+      content: { type: 'text', text: 'Thanks for your comment!' },
+      tenantId: 'tenant_1',
+      idempotencyKey: 'reply_cmd_789' // RECOMMENDED: always provide
+    }
+  ],
+  {
+    accessToken: process.env.INSTAGRAM_ACCESS_TOKEN,
+    dedupeStore,
+    retry: { attempts: 3, backoffMs: 200 }
+  }
+);
+```
+
+**⚠️ IMPORTANT - Idempotency Key:**
+
+The `idempotencyKey` field is **STRONGLY RECOMMENDED** for production use. If omitted, the dedupe key falls back to a content hash, which has limitations:
+
+- ❌ Replying to the same comment with different text (intentionally) will be blocked
+- ❌ Retries with modified text will be treated as duplicates
+- ✅ With `idempotencyKey`: dedupe is based on command ID, not content
+
+**Wiring Status**: **NOT yet integrated** in `apps/instagram`. The library code exists and is tested, but:
+
+- ❌ No capability handler registered in the app
+- ❌ No end-to-end integration test
+- ❌ Capability status in manifest: `planned` (not `active`)
+
+To promote to `active`, implement:
+
+1. Handler registration in `apps/instagram/src/app.ts`
+2. Integration test with real fixtures
+3. Command ID generation strategy for `idempotencyKey`
+
+---
+
+## Fixtures
+
+Real webhook payloads (sanitized) are available in `fixtures/`:
+
+- `message_text.json` - Single text DM
+- `message_media.json` - Single media DM (image attachment)
+- `batch_mixed.json` - Batch with 2 messages (text + media)
+
+---
+
+## Dependencies
+
+- `@connectors/core-runtime` - Runtime types and interfaces
+- `@connectors/core-validation` - Zod validation utilities
+- `@connectors/core-logging` - Structured logging
+- `@connectors/core-comments` - Comment reply command schemas
+- `zod` - Schema validation
+
+---
+
+## Development
+
+```bash
+pnpm build   # Compile TypeScript
+pnpm test    # Run unit tests
+pnpm lint    # ESLint
+pnpm format  # Prettier
+```
+
+---
+
+## Status Summary
+
+| Feature | Status | Wired in App | Tests |
+|---------|--------|--------------|-------|
+| Instagram DM Inbound | ✅ Active | ✅ Yes | ✅ 4 unit + 17 integration |
+| Comment Reply Client | 🚧 Library Only | ❌ No | ✅ 4 unit |
+
+---
+
+## References
+
+- [Meta Instagram Messaging API](https://developers.facebook.com/docs/messenger-platform/instagram)
+- [Meta Graph API v19.0](https://developers.facebook.com/docs/graph-api)

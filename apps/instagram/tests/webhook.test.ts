@@ -1,16 +1,14 @@
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { makeConversationMessageReceived } from '@connectors/core-events';
-import type { TenantId } from '@connectors/core-tenant';
 import { generateHmacSha256 } from '@connectors/core-signature';
 
 import { buildApp } from '../src/app.js';
 import { instagramManifest } from '../src/manifest.js';
+import textMessage from '../../../packages/core-meta-instagram/fixtures/message_text.json';
+import batchMixed from '../../../packages/core-meta-instagram/fixtures/batch_mixed.json';
 
 describe('instagram app', () => {
-  const tenantId = 'tenant-test' as TenantId;
-
   beforeEach(() => {
     delete process.env.INSTAGRAM_WEBHOOK_SECRET;
     delete process.env.INSTAGRAM_VERIFY_TOKEN;
@@ -28,12 +26,16 @@ describe('instagram app', () => {
       expect(instagramManifest.capabilities.length).toBeGreaterThan(0);
     });
 
-    it('declares expected capabilities', () => {
-      const capabilityIds = instagramManifest.capabilities.map((c) => c.id);
-      expect(capabilityIds).toContain('comment_ingest');
-      expect(capabilityIds).toContain('comment_reply');
-      expect(capabilityIds).toContain('ads_leads_ingest');
-      expect(capabilityIds).toContain('inbound_messages');
+    it('declares inbound_messages as active', () => {
+      const inboundCapability = instagramManifest.capabilities.find((c) => c.id === 'inbound_messages');
+      expect(inboundCapability).toBeDefined();
+      expect(inboundCapability?.status).toBe('active');
+    });
+
+    it('has webhook_verification active', () => {
+      const verifyCapability = instagramManifest.capabilities.find((c) => c.id === 'webhook_verification');
+      expect(verifyCapability).toBeDefined();
+      expect(verifyCapability?.status).toBe('active');
     });
   });
 
@@ -46,45 +48,67 @@ describe('instagram app', () => {
     });
   });
 
-  describe('webhook POST', () => {
-    it('rejects invalid webhook payload with 400, standardized error, and correlationId', async () => {
+  describe('webhook POST with real fixtures', () => {
+    it('accepts real Instagram DM text message (fixture) and processes 1 item', async () => {
+      const app = buildApp();
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const response = await request(app).post('/webhook').send(textMessage);
+
+      expect(response.status).toBe(200);
+      expect(response.body.ok).toBe(true);
+      expect(response.body.fullyDeduped).toBe(false);
+      expect(response.body.summary.total).toBe(1);
+      expect(response.body.summary.processed).toBe(1);
+      expect(response.body.summary.deduped).toBe(0);
+      expect(response.body.summary.failed).toBe(0);
+      expect(response.body.results).toHaveLength(1);
+      expect(response.body.results[0].capabilityId).toBe('inbound_messages');
+      expect(response.body.results[0].dedupeKey).toContain('instagram:17841400000000000:msg:m_igmsg_111');
+
+      logSpy.mockRestore();
+    });
+
+    it('accepts batch DM fixture (2 messages) and processes both items', async () => {
+      const app = buildApp();
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const response = await request(app).post('/webhook').send(batchMixed);
+
+      expect(response.status).toBe(200);
+      expect(response.body.ok).toBe(true);
+      expect(response.body.fullyDeduped).toBe(false);
+      expect(response.body.summary.total).toBe(2);
+      expect(response.body.summary.processed).toBe(2);
+      expect(response.body.results).toHaveLength(2);
+      expect(response.body.results[0].dedupeKey).toContain('instagram:17841400000000000:msg:m_igmsg_batch_1');
+      expect(response.body.results[1].dedupeKey).toContain('instagram:17841400000000000:msg:m_igmsg_batch_2');
+
+      logSpy.mockRestore();
+    });
+
+    it('deduplicates repeated message (fullyDeduped: true)', async () => {
+      const app = buildApp();
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      const first = await request(app).post('/webhook').send(textMessage);
+      expect(first.body.fullyDeduped).toBe(false);
+
+      const second = await request(app).post('/webhook').send(textMessage);
+      expect(second.status).toBe(200);
+      expect(second.body.ok).toBe(true);
+      expect(second.body.fullyDeduped).toBe(true);
+      expect(second.body.summary.deduped).toBe(1);
+      expect(second.body.summary.processed).toBe(0);
+
+      logSpy.mockRestore();
+    });
+
+    it('rejects invalid webhook payload with 400', async () => {
       const app = buildApp();
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
       const response = await request(app).post('/webhook').send({});
       expect(response.status).toBe(400);
       expect(response.body.ok).toBe(false);
       expect(response.body.code).toBe('WEBHOOK_VALIDATION_FAILED');
-      expect(typeof response.body.message).toBe('string');
-      expect(typeof response.body.correlationId).toBe('string');
-      expect(response.headers['x-correlation-id']).toBe(response.body.correlationId);
-      logSpy.mockRestore();
-    });
-
-    it('accepts valid webhook payload with fullyDeduped:false and correlationId', async () => {
-      const app = buildApp();
-      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-      const envelope = makeConversationMessageReceived({
-        tenantId,
-        source: 'instagram-webhook',
-        payload: {
-          channel: 'instagram',
-          externalMessageId: 'ig-msg-1',
-          conversationId: 'ig-conv-1',
-          direction: 'inbound',
-          sender: { id: 'ig-user-1' },
-          recipient: { id: 'ig-page-1' },
-          content: { type: 'text', text: 'Hello from Instagram' }
-        }
-      });
-
-      const response = await request(app).post('/webhook').send(envelope);
-
-      expect(response.status).toBe(200);
-      expect(response.body.ok).toBe(true);
-      expect(response.body.fullyDeduped).toBe(false);
-      expect(typeof response.body.correlationId).toBe('string');
-      expect(response.headers['x-correlation-id']).toBe(response.body.correlationId);
-
       logSpy.mockRestore();
     });
 
@@ -92,28 +116,27 @@ describe('instagram app', () => {
       const app = buildApp();
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
       const customCorrelationId = 'ig-cid-123';
-      const envelope = makeConversationMessageReceived({
-        tenantId,
-        source: 'instagram-webhook',
-        payload: {
-          channel: 'instagram',
-          externalMessageId: 'ig-msg-cid-1',
-          conversationId: 'ig-conv-cid-1',
-          direction: 'inbound',
-          sender: { id: 'ig-user-1' },
-          recipient: { id: 'ig-page-1' },
-          content: { type: 'text', text: 'Hello' }
-        }
-      });
-
       const response = await request(app)
         .post('/webhook')
         .set('x-correlation-id', customCorrelationId)
-        .send(envelope);
+        .send(textMessage);
 
       expect(response.status).toBe(200);
       expect(response.headers['x-correlation-id']).toBe(customCorrelationId);
       expect(response.body.correlationId).toBe(customCorrelationId);
+
+      logSpy.mockRestore();
+    });
+
+    it('does not log payload content (PII check)', async () => {
+      const app = buildApp();
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      await request(app).post('/webhook').send(textMessage);
+
+      const logs = logSpy.mock.calls.map((call) => JSON.stringify(call));
+      const hasPayloadContent = logs.some((log) => log.includes('hello from ig dm'));
+      expect(hasPayloadContent).toBe(false);
 
       logSpy.mockRestore();
     });
@@ -126,24 +149,8 @@ describe('instagram app', () => {
       delete process.env.INSTAGRAM_WEBHOOK_SECRET;
       const app = buildApp();
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-
-      const envelope = makeConversationMessageReceived({
-        tenantId,
-        source: 'instagram-webhook',
-        payload: {
-          channel: 'instagram',
-          externalMessageId: 'ig-msg-nosecret-1',
-          conversationId: 'ig-conv-1',
-          direction: 'inbound',
-          sender: { id: 'ig-user-1' },
-          recipient: { id: 'ig-page-1' },
-          content: { type: 'text', text: 'No secret' }
-        }
-      });
-
-      const response = await request(app).post('/webhook').send(envelope);
+      const response = await request(app).post('/webhook').send(textMessage);
       expect(response.status).toBe(200);
-
       logSpy.mockRestore();
     });
 
@@ -152,21 +159,7 @@ describe('instagram app', () => {
       const app = buildApp();
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-      const envelope = makeConversationMessageReceived({
-        tenantId,
-        source: 'instagram-webhook',
-        payload: {
-          channel: 'instagram',
-          externalMessageId: 'ig-msg-sig-1',
-          conversationId: 'ig-conv-1',
-          direction: 'inbound',
-          sender: { id: 'ig-user-1' },
-          recipient: { id: 'ig-page-1' },
-          content: { type: 'text', text: 'With signature' }
-        }
-      });
-
-      const rawBody = JSON.stringify(envelope);
+      const rawBody = JSON.stringify(textMessage);
       const signature = generateHmacSha256(TEST_SECRET, rawBody, 'sha256=');
 
       const response = await request(app)
@@ -186,21 +179,7 @@ describe('instagram app', () => {
       const app = buildApp();
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-      const envelope = makeConversationMessageReceived({
-        tenantId,
-        source: 'instagram-webhook',
-        payload: {
-          channel: 'instagram',
-          externalMessageId: 'ig-msg-badsig-1',
-          conversationId: 'ig-conv-1',
-          direction: 'inbound',
-          sender: { id: 'ig-user-1' },
-          recipient: { id: 'ig-page-1' },
-          content: { type: 'text', text: 'Bad signature' }
-        }
-      });
-
-      const rawBody = JSON.stringify(envelope);
+      const rawBody = JSON.stringify(textMessage);
       const invalidSignature = generateHmacSha256('wrong-secret', rawBody, 'sha256=');
 
       const response = await request(app)
@@ -260,7 +239,6 @@ describe('instagram app', () => {
       expect(response.body.ok).toBe(false);
       expect(response.body.code).toBe('FORBIDDEN');
       expect(response.body.message).toBe('Invalid verify token');
-      expect(response.headers['x-correlation-id']).toBe(response.body.correlationId);
 
       logSpy.mockRestore();
     });

@@ -9,8 +9,8 @@ Connectors monorepo para canais integrados ao Pyloto CRM. Cada app em `apps/*` �
 
 ### Apps (`apps/*`)
 Conectores deployáveis que usam o runtime unificado:
-- `apps/whatsapp`: conector WhatsApp Business (webhook + health)
-- `apps/instagram`: conector Instagram/Meta (comentários, leads, mensagens)
+- `apps/whatsapp`: conector WhatsApp Business — **active** (inbound, status, webhook verification)
+- `apps/instagram`: conector Instagram Business — **active** (inbound_messages, webhook_verification)
 - `apps/calendar`: scaffold para calendários (Google Calendar, Apple Calendar) — *planned*
 - `apps/automation`: scaffold para iPaaS (Zapier, Make) — *planned*
 

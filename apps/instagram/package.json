@@ -17,6 +17,7 @@
     "@connectors/core-logging": "workspace:*",
     "@connectors/core-runtime": "workspace:*",
     "@connectors/core-signature": "workspace:*",
+    "@connectors/core-meta-instagram": "workspace:*",
     "@connectors/adapter-express": "workspace:*",
     "express": "^4.18.2"
   },

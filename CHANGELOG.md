@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-01-19
+
+### Added
+
+- **core-meta-instagram**: New package with Zod schemas for Meta Instagram webhook payloads
+- **core-meta-instagram**: Real webhook fixtures (text message, media message, batch)
+- **core-meta-instagram**: `parseInstagramRuntimeRequest()` for batch-safe DM parsing
+- **core-meta-instagram**: `sendCommentReplyBatch()` client library (not yet wired in app)
+- **core-meta-instagram**: Comment reply client with retry/backoff and dedupe support
+- **apps/instagram**: Real Instagram DM parsing (replaces fake `parseEventEnvelope`)
+- **apps/instagram**: `inbound_messages` capability promoted to `active`
+- **apps/instagram**: Comprehensive integration tests with real fixtures
+
+### Changed
+
+- **apps/instagram**: Migrated from fake parsing to real `parseInstagramRuntimeRequest()`
+- **apps/instagram**: Handler now logs DM metadata (`mid`, `senderId`) instead of generic event
+
+---
+
 ## [0.2.0] - 2026-01-18
 
 ### Added

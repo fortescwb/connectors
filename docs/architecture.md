@@ -72,30 +72,34 @@ Comandos são ações que o sistema envia para conectores executarem:
 | `core-ads` | Schemas de leads e formulários | active |
 | `core-comments` | Schemas de comentários e replies | active |
 | `core-rate-limit` | Rate limiting e backoff | active |
-| `core-messaging` | Mensagens diretas (DMs) inbound/outbound | **planned** |
+| `core-messaging` | Tipos outbound implementados; DMs inbound planned | **partial** |
 | `core-reactions` | Reações (likes, emojis) em posts/comentários | **planned** |
 
 ---
 
-## Domínios Planejados
+## Domínios Parcialmente Implementados
 
-### `core-messaging` (planned)
+### `core-messaging` (partial)
 
-**Responsabilidade**: Normalização de mensagens diretas (DMs) para canais como Instagram Direct, Facebook Messenger, e futuros provedores de chat.
+**Responsabilidade**: Tipos e schemas para mensagens diretas (DMs).
 
-**Distinção de `core-events`**: `core-events` define o envelope genérico `ConversationMessageReceived`. `core-messaging` adiciona:
-- Schemas específicos de DM (threads, typing indicators, read receipts)
+**Status atual (implementado):**
+- `OutboundMessageIntent` — schema Zod para intents de envio outbound
+- `OutboundMessagePayload` — tipos de payload (text por enquanto)
+- Usado por `core-runtime` (outbound) e `core-meta-whatsapp` (sendMessage)
+
+**Planned (não implementado):**
+- Schemas específicos de DM inbound (threads, typing indicators, read receipts)
 - Parsing de payloads de provedores (Meta DM webhook → `DirectMessage`)
-- Helpers de dedupe key para mensagens diretas
+- Helpers de dedupe key para mensagens diretas inbound
 
-**Eventos esperados**:
-| Tipo | Descrição |
-|------|-----------|
-| `DirectMessage` | Mensagem direta normalizada |
-| `TypingIndicator` | Indicador de digitação |
-| `ReadReceipt` | Confirmação de leitura |
+**Distinção de `core-events`**: `core-events` define o envelope genérico `ConversationMessageReceived`. `core-messaging` adiciona tipos específicos de mensagens diretas.
 
-**Relação com `core-runtime`**: Conectores usam `core-runtime` para webhook handling; `core-messaging` fornece `parseEvent` específico para DMs.
+**Relação com `core-runtime`**: Conectores usam `core-runtime` para webhook handling; `core-messaging` fornece tipos para outbound e (futuramente) `parseEvent` específico para DMs.
+
+---
+
+## Domínios Planejados
 
 ### `core-reactions` (planned)
 
@@ -181,9 +185,9 @@ export const instagramManifest: ConnectorManifest = {
   platform: 'meta',
   capabilities: [
     capability('inbound_messages', 'active', 'Receive DMs via webhook'),
-    capability('comment_ingest', 'active', 'Receive comments on posts'),
+    capability('comment_ingest', 'planned', 'Receive comments on posts'),
     capability('comment_reply', 'planned', 'Reply to comments via API'),
-    capability('ads_leads_ingest', 'active', 'Receive leads from Lead Ads'),
+    capability('ads_leads_ingest', 'planned', 'Receive leads from Lead Ads'),
     capability('webhook_verification', 'active', 'Meta webhook verification'),
   ],
   webhookPath: '/webhook',
@@ -204,10 +208,10 @@ export const instagramManifestWithAuth: ConnectorManifest = {
   version: '0.2.0',
   platform: 'meta',
   capabilities: [
-    capability('inbound_messages', 'active', 'Receive DMs via webhook'),
-    capability('comment_ingest', 'active', 'Receive comments on posts'),
+    capability('inbound_messages', 'planned', 'Receive DMs via webhook'),
+    capability('comment_ingest', 'planned', 'Receive comments on posts'),
     capability('comment_reply', 'planned', 'Reply to comments via API'),
-    capability('ads_leads_ingest', 'active', 'Receive leads from Lead Ads'),
+    capability('ads_leads_ingest', 'planned', 'Receive leads from Lead Ads'),
     capability('webhook_verification', 'active', 'Meta webhook verification'),
   ],
   webhookPath: '/webhook',
@@ -638,7 +642,9 @@ apps/{connector}/
 
 ### Conectores Implementados
 
-| Conector | ID | Platform | Status | Capabilities |
-|----------|-----|----------|--------|--------------|
-| WhatsApp | `whatsapp` | meta | ✅ Produção | inbound_messages, outbound_messages, webhook_verification |
-| Instagram | `instagram` | meta | 🚧 Scaffold | inbound_messages, comment_ingest, ads_leads_ingest, webhook_verification |
+| Conector | ID | Platform | Status | Capabilities Ativas |
+|----------|-----|----------|--------|---------------------|
+| WhatsApp | `whatsapp` | meta | ✅ Active | inbound_messages, message_status_updates, webhook_verification |
+| Instagram | `instagram` | meta | ✅ Active | inbound_messages, webhook_verification |
+| Calendar | `calendar` | google | 📋 Planned | (scaffold apenas) |
+| Automation | `automation` | zapier | 📋 Planned | (scaffold apenas) |

@@ -1,14 +1,13 @@
 import express, { type Express } from 'express';
 
-import { parseEventEnvelope } from '@connectors/core-events';
 import { createLogger } from '@connectors/core-logging';
 import { rawBodyMiddleware, type RawBodyRequest } from '@connectors/adapter-express';
 import { verifyHmacSha256 } from '@connectors/core-signature';
+import { parseInstagramRuntimeRequest } from '@connectors/core-meta-instagram';
 import {
   buildWebhookHandlers,
   type RuntimeRequest,
   type SignatureVerifier,
-  type ParsedEvent,
   type WebhookVerifyHandler
 } from '@connectors/core-runtime';
 
@@ -96,20 +95,10 @@ const verifyWebhook: WebhookVerifyHandler = (query) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// EVENT PARSER
+// EVENT PARSER (REAL IG DM)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function parseEvent(request: RuntimeRequest): ParsedEvent {
-  const envelope = parseEventEnvelope(request.body);
-
-  return {
-    capabilityId: 'inbound_messages',
-    dedupeKey: envelope.dedupeKey,
-    correlationId: envelope.correlationId,
-    tenant: envelope.tenantId,
-    payload: envelope
-  };
-}
+const parseEvents = (request: RuntimeRequest) => parseInstagramRuntimeRequest(request);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // APP BUILDER
@@ -131,12 +120,13 @@ export function buildApp(): Express {
     manifest: instagramManifest,
     registry: {
       inbound_messages: async (event, ctx) => {
-        ctx.logger.info('Received webhook event', {
-          dedupeKey: (event as { dedupeKey?: string }).dedupeKey
+        ctx.logger.info('Received Instagram DM', {
+          mid: (event as any).mid,
+          sender: (event as any).senderId
         });
       }
     },
-    parseEvent,
+    parseEvents,
     verifyWebhook,
     signatureVerifier: createMetaSignatureVerifier(),
     logger

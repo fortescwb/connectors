@@ -18,8 +18,9 @@
 
 4. **Planejar novos domínios e pacotes**
 
-   * ✅ Domínios `core-messaging` e `core-reactions` documentados em `docs/architecture.md`
-   * Próximo: implementar os pacotes quando houver demanda real de conectores
+   * ✅ `core-messaging` implementado parcialmente (tipos outbound: `OutboundMessageIntent`)
+   * ✅ `core-reactions` documentado em `docs/architecture.md` (pacote não criado)
+   * Próximo: implementar parsing de DMs inbound em `core-messaging` quando houver demanda real
 
 5. **Implementar `DedupeStore` persistente**
 
@@ -97,3 +98,35 @@
 - [x] Parser extrai `dedupeKey` de `wamid` (message ID)
 - [x] Testes com fixtures reais passando
 - [x] Integração com `apps/whatsapp` usando `parseEvents`
+
+---
+
+### ✅ F1.4 (Instagram DM Inbound Real) — Fechado
+
+**Critérios atendidos:**
+- [x] `core-meta-instagram` criado com Zod schemas para payloads Meta Instagram reais
+- [x] Fixtures reais de webhook (text message, media message, batch)
+- [x] `parseInstagramRuntimeRequest()` com processamento batch-safe
+- [x] Parser extrai `dedupeKey` no formato `instagram:{recipientId}:msg:{mid}`
+- [x] Testes de parser passando (single, media, batch, invalid)
+- [x] Integração com `apps/instagram` — fake parsing removido
+- [x] Capability `inbound_messages` promovida para `active`
+- [x] Testes de integração com fixtures reais (17 testes passando)
+
+---
+
+### 🚧 F1.5 (Instagram Comment Reply) — Parcial
+
+**Library code implementado:**
+- [x] `sendCommentReplyBatch()` implementado em `core-meta-instagram`
+- [x] Retry/backoff configurável (default 3 tentativas, 200ms base)
+- [x] Dedupe check antes de HTTP call
+- [x] Error classification: client_error, retry_exhausted, timeout, network_error
+- [x] Integração com Facebook Graph API v19.0
+- [x] Testes de reply client (success, dedupe, retry on 500, timeout handling)
+
+**Pendente para promover a active:**
+- [ ] Wiring no app Instagram (handler capability registrado)
+- [ ] End-to-end integration test
+- [ ] DedupeKey review: usar command ID estável, não apenas content hash
+- [ ] Capability `comment_reply` mantida como `planned` até wiring completo
