@@ -2,24 +2,36 @@ import type { EventEnvelope } from '@connectors/core-events';
 import { createLogger, type Logger } from '@connectors/core-logging';
 import { ValidationError } from '@connectors/core-validation';
 
+/**
+ * @deprecated Use core-runtime webhook handling; removal planned for v1.0.0.
+ */
 export type WebhookContext = {
   tenantId: EventEnvelope['tenantId'];
   correlationId?: string;
   logger: Logger;
 };
 
+/**
+ * @deprecated Use core-runtime webhook handling; removal planned for v1.0.0.
+ */
 export type WebhookRequest = {
   headers: Record<string, string | string[] | undefined>;
   body: unknown;
   rawBody?: Buffer | string;
 };
 
+/**
+ * @deprecated Use core-runtime webhook handling; removal planned for v1.0.0.
+ */
 export type WebhookResponse = {
   status: number;
   body: unknown;
   headers?: Record<string, string>;
 };
 
+/**
+ * @deprecated Use core-runtime webhook handling; removal planned for v1.0.0.
+ */
 export type WebhookOptions = {
   serviceName: string;
   parseEvent: (input: WebhookRequest) => EventEnvelope | Promise<EventEnvelope>;
@@ -37,6 +49,8 @@ export interface DedupeStore {
   /**
    * Check if a key is a duplicate and mark it as seen.
    * Returns true if the key was already seen (duplicate), false otherwise.
+   *
+   * @deprecated Use core-runtime dedupe interfaces; removal planned for v1.0.0.
    */
   isDuplicate: (key: string) => Promise<boolean>;
 }
@@ -44,6 +58,8 @@ export interface DedupeStore {
 /**
  * In-memory deduplication store with TTL.
  * Suitable for single-instance deployments or testing.
+ *
+  * @deprecated Use core-runtime dedupe implementations; removal planned for v1.0.0.
  */
 export class InMemoryDedupeStore implements DedupeStore {
   private readonly store = new Map<string, number>();
@@ -69,6 +85,8 @@ export class InMemoryDedupeStore implements DedupeStore {
 /**
  * No-op deduplication store that never deduplicates.
  * Use when idempotency is handled upstream or not needed.
+ *
+ * @deprecated Use core-runtime dedupe implementations; removal planned for v1.0.0.
  */
 export class NoopDedupeStore implements DedupeStore {
   async isDuplicate(_key: string): Promise<boolean> {
@@ -98,6 +116,9 @@ function extractCorrelationIdFromHeaders(
   return undefined;
 }
 
+/**
+ * @deprecated Use core-runtime webhook handling; removal planned for v1.0.0.
+ */
 export function createWebhookProcessor(options: WebhookOptions) {
   const baseLogger = options.logger ?? createLogger({ service: options.serviceName });
   const dedupeStore =

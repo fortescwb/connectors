@@ -43,7 +43,7 @@ const runtime = createConnectorRuntime({
   }
 });
 
-// Use with Express via adapter-express
+// Use with Express (rawBody capture can use adapter-express, which is deprecated)
 app.get('/webhook', async (req, res) => {
   const result = await runtime.handlers.handleGet({
     headers: req.headers,

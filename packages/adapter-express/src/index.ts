@@ -10,6 +10,8 @@ import {
 
 /**
  * Express request with rawBody captured and optional correlationId.
+ *
+ * @deprecated Use core-runtime webhook handlers directly; removal planned for v1.0.0.
  */
 export interface RawBodyRequest extends express.Request {
   rawBody?: Buffer;
@@ -19,6 +21,8 @@ export interface RawBodyRequest extends express.Request {
 /**
  * Middleware to capture raw body as Buffer before JSON parsing.
  * Must be used before express.json() for routes that need signature verification.
+ *
+ * @deprecated Use core-runtime with an app-local raw body capture; removal planned for v1.0.0.
  */
 export function rawBodyMiddleware(): RequestHandler {
   return express.json({
@@ -28,6 +32,9 @@ export function rawBodyMiddleware(): RequestHandler {
   });
 }
 
+/**
+ * @deprecated Use core-runtime webhook handlers directly; removal planned for v1.0.0.
+ */
 export function createExpressWebhookHandler(processor: ReturnType<typeof createWebhookProcessor>): RequestHandler {
   return async (req, res, _next) => {
     const rawReq = req as RawBodyRequest;
@@ -57,6 +64,9 @@ export function createExpressWebhookHandler(processor: ReturnType<typeof createW
   };
 }
 
+/**
+ * @deprecated Use core-runtime webhook handlers directly; removal planned for v1.0.0.
+ */
 export function createExpressWebhookHandlerFromOptions(options: WebhookOptions): RequestHandler {
   const processor = createWebhookProcessor(options);
   return createExpressWebhookHandler(processor);

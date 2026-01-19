@@ -307,7 +307,7 @@ Campos obrigatórios em todos os eventos (`EventEnvelope`):
 - Schemas Zod em `core-events` são expostos junto com tipos inferidos.
 - `parseEventEnvelope` retorna um discriminated union por `eventType`.
 - Use `safeParseOrThrow(schema, data, context)` (`core-validation`) para erros claros e tipados (`ValidationError`).
-- Webhooks: `core-webhooks` processa requests de forma agnóstica e aplica dedupe (`dedupeKey` com TTL configurável); `adapter-express` adapta para Express.
+- Webhooks: `core-runtime` é o caminho atual; `core-webhooks`/`adapter-express` permanecem apenas por compatibilidade legada (deprecated).
 
 ### Multi-tenant
 - `TenantId` é um tipo branded (`@connectors/core-tenant`).
@@ -384,18 +384,14 @@ Endpoint principal para receber webhooks do Meta/WhatsApp.
   - Log de info é emitido: `"Signature validation skipped"` com campo `signatureValidation: "skipped"`
   - Útil para desenvolvimento local
 
-> **Importante:** A verificação HMAC exige o corpo bruto (`rawBody`) antes do parse JSON. O middleware `rawBodyMiddleware()` do `adapter-express` captura o Buffer original via `express.json({ verify })`. Isso é essencial porque o Meta assina o corpo literal da requisição.
+> **Importante:** A verificação HMAC exige o corpo bruto (`rawBody`) antes do parse JSON. O middleware `rawBodyMiddleware()` do `adapter-express` (deprecated, mantido por compatibilidade) captura o Buffer original via `express.json({ verify })`. Isso é essencial porque o Meta assina o corpo literal da requisição.
 
 ### Política de Deduplicação
 
-- **Implementação (core-webhooks):**
-  - `DedupeStore`: interface para checar e marcar chaves como “vistas”
-  - `InMemoryDedupeStore`: store em memória com TTL (padrão quando `dedupeStore` não é fornecido)
-  - `NoopDedupeStore`: nunca deduplica (útil quando a idempotência é tratada fora)
-
-- **Configuração:**
-  - `createWebhookProcessor({ dedupeStore?, dedupeTtlMs? })`
-  - Se `dedupeStore` não for fornecido, usa `InMemoryDedupeStore(dedupeTtlMs ?? 5min)`
+- **Implementação (core-runtime):**
+  - Dedupe por item via `DedupeStore.checkAndMark` antes do handler.
+  - `InMemoryDedupeStore` apenas para dev/single-instance; produção requer store compartilhado (ex.: RedisDedupeStore).
+  - `NoopDedupeStore` somente para cenários onde idempotência é tratada fora do runtime.
 
 - **Chave de dedupe:**
   - A chave utilizada é `event.dedupeKey` (vem do `EventEnvelope` parseado em `parseEvent`).
@@ -506,7 +502,7 @@ Referência rápida de padrões para replicar em novos conectores.
 
 ### Signature Policy
 
-- **Requisito:** `rawBodyMiddleware()` do `adapter-express` deve ser aplicado ANTES de qualquer parse JSON
+- **Requisito:** `rawBodyMiddleware()` (atualmente fornecido via `adapter-express`, pacote **deprecated** mantido só por compatibilidade) deve ser aplicado ANTES de qualquer parse JSON
 - **Header:** `x-hub-signature-256` (formato `sha256=<hex>`)
 - **Algoritmo:** HMAC-SHA256 com comparação timing-safe (`crypto.timingSafeEqual`)
 - **Comportamento:**
@@ -516,7 +512,7 @@ Referência rápida de padrões para replicar em novos conectores.
 
 ### rawBodyMiddleware Obrigatório
 
-Quando `webhook.signature.requireRawBody: true` está configurado no manifest, o conector **deve** aplicar `rawBodyMiddleware()` do `adapter-express` antes de qualquer parser JSON.
+Quando `webhook.signature.requireRawBody: true` está configurado no manifest, o conector **deve** aplicar `rawBodyMiddleware()` (deprecated, mantido para compatibilidade) antes de qualquer parser JSON.
 
 **Por que é necessário:**
 
@@ -527,15 +523,14 @@ Quando `webhook.signature.requireRawBody: true` está configurado no manifest, o
 **Uso correto:**
 
 ```typescript
-import { rawBodyMiddleware, createExpressAdapter } from '@connectors/adapter-express';
+import { rawBodyMiddleware } from '@connectors/adapter-express'; // deprecated
 
 const app = express();
 
 // 1. rawBodyMiddleware PRIMEIRO - captura Buffer original
 app.use(rawBodyMiddleware());
 
-// 2. Depois o adapter configura rotas com acesso a req.rawBody
-const adapter = createExpressAdapter({ app });
+// 2. Depois configure rotas/buildWebhookHandlers com acesso a req.rawBody
 ```
 
 **Erro comum:**
@@ -626,7 +621,7 @@ ctx.logger.info('Processando', {
 
 ```
 apps/{connector}/
-├── package.json          # deps: @connectors/adapter-express, core-*
+├── package.json          # deps: core-* (+ @connectors/adapter-express somente se precisar do rawBodyMiddleware legado)
 ├── tsconfig.json
 ├── tsconfig.build.json
 ├── vitest.config.ts
