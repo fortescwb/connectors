@@ -11,3 +11,4 @@ coverage/
 
 # Local artifacts (not tracked)
 .local/
+package-lock.json

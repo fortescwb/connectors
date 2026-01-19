@@ -1,20 +1,15 @@
 import { createLogger, type Logger } from '@connectors/core-logging';
 
 import { DEFAULT_DEDUPE_TTL_MS } from '../constants.js';
+import { emitMetric, computeLatencyMs, type ObservabilityMetric } from '../observability/utils.js';
 import type { OutboundBatchResult, OutboundIntent, OutboundRuntimeOptions, OutboundSendFn } from './types.js';
 
-type OutboundMetric =
-  | 'event_processed_total'
-  | 'event_deduped_total'
-  | 'event_failed_total'
-  | 'handler_latency_ms'
-  | 'event_batch_summary';
+// OutboundMetric is a subset of ObservabilityMetric (excludes webhook_received_total)
+type OutboundMetric = Exclude<ObservabilityMetric, 'webhook_received_total'>;
 
 const OUTBOUND_CAPABILITY_ID = 'outbound_messages';
 
-function emitMetric(logger: Logger, metric: OutboundMetric, value: number, context?: Record<string, unknown>) {
-  logger.info('metric', { metric, value, ...context });
-}
+// emitMetric and computeLatencyMs are now imported from observability/utils.ts
 
 function buildLogger(
   baseLogger: Logger | undefined,
@@ -38,10 +33,6 @@ function buildLogger(
   }
 
   return createLogger(mergedContext);
-}
-
-function computeLatencyMs(startedAt: number): number {
-  return Date.now() - startedAt;
 }
 
 function maskPhoneNumber(raw: string): string {

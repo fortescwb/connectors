@@ -13,6 +13,7 @@
 import type { ConnectorManifest, CapabilityId } from '@connectors/core-connectors';
 import { createLogger, type Logger, type LoggerContext } from '@connectors/core-logging';
 import { DEFAULT_DEDUPE_TTL_MS } from './constants.js';
+import { emitMetric, computeLatencyMs, type ObservabilityMetric } from './observability/utils.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES: Requests and Responses
@@ -357,21 +358,10 @@ export function generateCorrelationId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 11)}`;
 }
 
-type RuntimeMetric =
-  | 'webhook_received_total'
-  | 'event_processed_total'
-  | 'event_deduped_total'
-  | 'event_failed_total'
-  | 'handler_latency_ms'
-  | 'event_batch_summary';
+// RuntimeMetric is now imported as ObservabilityMetric from observability/utils.ts
+type RuntimeMetric = ObservabilityMetric;
 
-function emitMetric(logger: Logger, metric: RuntimeMetric, value: number, context?: LoggerContext) {
-  logger.info('metric', { metric, value, ...context });
-}
-
-function computeLatencyMs(startedAt: number): number {
-  return Date.now() - startedAt;
-}
+// emitMetric and computeLatencyMs are now imported from observability/utils.ts
 
 /**
  * Extract correlationId from headers.
