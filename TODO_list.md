@@ -156,35 +156,19 @@
 
 **Problema:** Manifests declaram capabilities como `active` que na verdade dependem de InMemoryDedupeStore (não production-ready) ou não estão wired no app.
 
+**Rubric (Sprint-0, binário)**
+
+| Status    | Requisitos mínimos                                                                                                  |
+|-----------|----------------------------------------------------------------------------------------------------------------------|
+| planned   | Intenção apenas; nenhuma entrega funcional, sem fixtures reais, sem handlers/clientes.                              |
+| scaffold  | Código parcial (schemas/cliente/handler) mas faltam fixtures reais **ou** handlers não wired **ou** sem dedupe/logs.|
+| active    | Parser ou client real com fixtures determinísticas; handler/client wired; testes cobrindo batch + dedupe estável; per-item logging (correlationId + dedupeKey); dedupeStore configurável (não hardcoded); sem SLO/runbook. |
+| beta      | Todos os itens de `active` + observabilidade consolidada (métricas/traços), runbook mínimo; SLO/alertas ainda em construção. |
+| prod      | Todos os itens de `beta` + SLO publicado, alertas/rotações de secrets e auditoria aplicadas.                        |
+
 **Tarefas:**
-- [ ] **S0.5.1** Criar critérios claros para status de capability:
-  ```markdown
-  ## Critérios de Status de Capability
-  
-  ### `active`
-  - Parser implementado com Zod schemas reais
-  - Handler registrado no runtime
-  - Testes de integração com fixtures reais
-  - DedupeStore configurável (não hardcoded InMemory)
-  - Documentação de uso
-  
-  ### `planned`
-  - Declarado no manifest mas não implementado
-  - Pode ter stub/TODO no código
-  ```
-- [ ] **S0.5.2** Auditar `apps/instagram/src/manifest.ts`:
-  - `inbound_messages`: Verificar se atende critérios de `active`
-  - **Nota:** Usa `InMemoryDedupeStore` por default — documentar que é `active (development)` ou rebaixar para `beta`
-- [ ] **S0.5.3** Auditar `apps/whatsapp/src/app.ts`:
-  - Mesmo problema — default `InMemoryDedupeStore`
-- [ ] **S0.5.4** Adicionar status intermediário `beta` ou `development`:
-  ```typescript
-  capability('inbound_messages', 'active', 'Receive DMs...', {
-    productionReady: false,
-    note: 'Requires RedisDedupeStore for production'
-  })
-  ```
-- [ ] **S0.5.5** Atualizar documentação (README, architecture.md) para refletir status real
+- [ ] **S0.5.1** Aplicar rubric acima a todos os manifests/apps listados.
+- [ ] **S0.5.2** Ajustar status/descrições em manifests para refletir evidência real; adicionar notas de limitação quando dependem de store in-memory ou client não wired.
 
 **Arquivos afetados:**
 - `packages/core-connectors/src/index.ts` (schema de capability)

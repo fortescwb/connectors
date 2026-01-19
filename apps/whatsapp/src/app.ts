@@ -23,9 +23,17 @@ export const whatsappManifest: ConnectorManifest = {
   version: '0.1.0',
   platform: 'meta',
   capabilities: [
-    capability('inbound_messages', 'active', 'Receive messages via WhatsApp webhook'),
-    capability('message_status_updates', 'active', 'Receive message delivery status'),
-    capability('outbound_messages', 'planned', 'Send messages via Graph API'),
+    capability(
+      'inbound_messages',
+      'active',
+      'Receive messages via WhatsApp webhook (requires shared dedupe store for production)'
+    ),
+    capability(
+      'message_status_updates',
+      'active',
+      'Receive message delivery status (requires shared dedupe store for production)'
+    ),
+    capability('outbound_messages', 'planned', 'Send messages via Graph API (not implemented yet)'),
     capability('webhook_verification', 'active', 'Meta webhook verification endpoint')
   ],
   webhookPath: '/webhook',
