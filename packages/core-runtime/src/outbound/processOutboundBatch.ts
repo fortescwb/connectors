@@ -143,7 +143,7 @@ export async function processOutboundBatch<TIntent extends OutboundIntent, TProv
           errorCode: dedupeErrorCode,
           latencyMs
         });
-        emitMetric(itemLogger, 'handler_latency_ms', latencyMs, { outcome: 'deduped', latencyMs });
+        emitMetric(itemLogger, 'handler_latency_ms', latencyMs, { outcome: 'deduped' });
         results.push({
           intentId: intent.intentId,
           dedupeKey: intent.dedupeKey,
@@ -169,7 +169,7 @@ export async function processOutboundBatch<TIntent extends OutboundIntent, TProv
         toMasked: maskPhoneNumber(intent.to)
       });
       emitMetric(itemLogger, 'event_deduped_total', 1, { outcome: 'deduped', latencyMs });
-      emitMetric(itemLogger, 'handler_latency_ms', latencyMs, { outcome: 'deduped', latencyMs });
+      emitMetric(itemLogger, 'handler_latency_ms', latencyMs, { outcome: 'deduped' });
       results.push({
         intentId: intent.intentId,
         dedupeKey: intent.dedupeKey,
@@ -201,7 +201,7 @@ export async function processOutboundBatch<TIntent extends OutboundIntent, TProv
         ...(upstreamStatus ? { upstreamStatus } : {}),
         ...(dedupeErrorCode ? { errorCode: dedupeErrorCode } : {})
       });
-      emitMetric(itemLogger, 'handler_latency_ms', latencyMs, { outcome: 'sent', latencyMs });
+      emitMetric(itemLogger, 'handler_latency_ms', latencyMs, { outcome: 'sent' });
       results.push({
         intentId: intent.intentId,
         dedupeKey: intent.dedupeKey,
@@ -234,7 +234,7 @@ export async function processOutboundBatch<TIntent extends OutboundIntent, TProv
         latencyMs,
         ...(upstreamStatus ? { upstreamStatus } : {})
       });
-      emitMetric(itemLogger, 'handler_latency_ms', latencyMs, { outcome: 'failed', latencyMs });
+      emitMetric(itemLogger, 'handler_latency_ms', latencyMs, { outcome: 'failed' });
       results.push({
         intentId: intent.intentId,
         dedupeKey: intent.dedupeKey,

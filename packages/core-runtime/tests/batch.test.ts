@@ -293,7 +293,7 @@ describe('batch processing', () => {
 
     const latencyMetrics = logs.filter((log) => log['metric'] === 'handler_latency_ms');
     expect(latencyMetrics).toHaveLength(3);
-    expect(latencyMetrics.every((metric) => typeof metric['latencyMs'] === 'number')).toBe(true);
+    expect(latencyMetrics.every((metric) => typeof metric['value'] === 'number')).toBe(true);
 
     logSpy.mockRestore();
   });
