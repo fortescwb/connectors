@@ -74,7 +74,8 @@ describe('core-comments', () => {
         externalPostId: 'post-456',
         platform: 'instagram',
         content: { type: 'text', text: 'Thanks for your comment!' },
-        tenantId: 'tenant-1'
+        tenantId: 'tenant-1',
+        idempotencyKey: 'reply-1'
       };
       const result = parseCommentReplyCommand(command);
       expect(result.externalCommentId).toBe('comment-123');
@@ -87,9 +88,21 @@ describe('core-comments', () => {
         externalPostId: 'post-456',
         platform: 'instagram',
         content: { type: 'text', text: '' },
-        tenantId: 'tenant-1'
+        tenantId: 'tenant-1',
+        idempotencyKey: 'reply-1'
       };
       expect(() => parseCommentReplyCommand(invalid)).toThrow();
+    });
+
+    it('throws when idempotencyKey is missing', () => {
+      const invalid = {
+        externalCommentId: 'comment-123',
+        externalPostId: 'post-456',
+        platform: 'instagram',
+        content: { type: 'text', text: 'Hello' },
+        tenantId: 'tenant-1'
+      };
+      expect(() => parseCommentReplyCommand(invalid)).toThrow(/idempotencyKey/);
     });
   });
 
@@ -102,13 +115,8 @@ describe('core-comments', () => {
 
   describe('buildCommentReplyDedupeKey', () => {
     it('builds key with idempotency key', () => {
-      const key = buildCommentReplyDedupeKey('instagram', 'comment-123', 'idem-456');
-      expect(key).toBe('instagram:reply:comment-123:idem-456');
-    });
-
-    it('builds key with timestamp when no idempotency key', () => {
-      const key = buildCommentReplyDedupeKey('instagram', 'comment-123');
-      expect(key).toMatch(/^instagram:reply:comment-123:\w+$/);
+      const key = buildCommentReplyDedupeKey('instagram', 'tenant-1', 'comment-123', 'idem-456');
+      expect(key).toBe('instagram:tenant:tenant-1:comment:comment-123:reply:idem-456');
     });
   });
 

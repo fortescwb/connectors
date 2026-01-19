@@ -6,6 +6,18 @@ import { sendCommentReplyBatch } from '../src/index.js';
 
 const sharedDedupeStore = new InMemoryDedupeStore();
 
+function createCommand(overrides: Partial<Parameters<typeof sendCommentReplyBatch>[0][number]> = {}) {
+  return {
+    externalCommentId: 'comment-default',
+    externalPostId: 'post-default',
+    platform: 'instagram',
+    content: { type: 'text', text: 'Thanks for your comment!' },
+    tenantId: 'tenant-1',
+    idempotencyKey: 'reply-default',
+    ...overrides
+  };
+}
+
 function createHttpClient({ status = 200, body = { id: 'reply_1' } } = {}) {
   const fn = vi.fn(async () =>
     new Response(JSON.stringify(body), {
@@ -17,18 +29,24 @@ function createHttpClient({ status = 200, body = { id: 'reply_1' } } = {}) {
 }
 
 describe('sendCommentReplyBatch', () => {
+  it('throws when idempotencyKey is missing to prevent unstable dedupe keys', async () => {
+    const httpClient = createHttpClient();
+
+    await expect(
+      sendCommentReplyBatch(
+        [
+          // @ts-expect-error intentional: validating runtime guard when idempotencyKey is omitted
+          createCommand({ idempotencyKey: undefined })
+        ],
+        { accessToken: 'token', httpClient, dedupeStore: sharedDedupeStore, apiBaseUrl: 'https://graph.facebook.com/v19.0' }
+      )
+    ).rejects.toThrow(/idempotencyKey/);
+  });
+
   it('sends a reply with dedupe and returns reply id', async () => {
     const httpClient = createHttpClient();
     const results = await sendCommentReplyBatch(
-      [
-        {
-          externalCommentId: '1789_comment_1',
-          externalPostId: '1789_post_1',
-          platform: 'instagram',
-          content: { type: 'text', text: 'Thanks for your comment!' },
-          tenantId: 'tenant-1'
-        }
-      ],
+      [createCommand({ externalCommentId: '1789_comment_1', externalPostId: '1789_post_1', idempotencyKey: 'reply-1' })],
       {
         accessToken: 'token',
         httpClient,
@@ -42,15 +60,14 @@ describe('sendCommentReplyBatch', () => {
     expect(httpClient).toHaveBeenCalledTimes(1);
   });
 
-  it('dedupes repeated command and does not send twice', async () => {
+  it('dedupes repeated command with same idempotencyKey and commentId across calls', async () => {
     const httpClient = createHttpClient();
-    const command = {
+    const command = createCommand({
       externalCommentId: '1789_comment_dup',
       externalPostId: '1789_post',
-      platform: 'instagram',
       content: { type: 'text', text: 'Thanks!' },
-      tenantId: 'tenant-1'
-    } as const;
+      idempotencyKey: 'reply-dedupe'
+    });
 
     const first = await sendCommentReplyBatch([command], {
       accessToken: 'token',
@@ -72,6 +89,41 @@ describe('sendCommentReplyBatch', () => {
     expect(httpClient).toHaveBeenCalledTimes(1);
   });
 
+  it('does not dedupe when idempotencyKey differs for the same comment', async () => {
+    const httpClient = createHttpClient();
+    const commandBase = {
+      externalCommentId: '1789_comment_same',
+      externalPostId: '1789_post',
+      content: { type: 'text', text: 'Variant reply' }
+    } as const;
+
+    await sendCommentReplyBatch(
+      [createCommand({ ...commandBase, idempotencyKey: 'reply-variant-1' })],
+      { accessToken: 'token', httpClient, dedupeStore: sharedDedupeStore, apiBaseUrl: 'https://graph.facebook.com/v19.0' }
+    );
+    await sendCommentReplyBatch(
+      [createCommand({ ...commandBase, idempotencyKey: 'reply-variant-2' })],
+      { accessToken: 'token', httpClient, dedupeStore: sharedDedupeStore, apiBaseUrl: 'https://graph.facebook.com/v19.0' }
+    );
+
+    expect(httpClient).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not dedupe when commentId differs even with same idempotencyKey', async () => {
+    const httpClient = createHttpClient();
+
+    await sendCommentReplyBatch(
+      [createCommand({ externalCommentId: 'comment-a', idempotencyKey: 'shared-idem', content: { type: 'text', text: 'First' } })],
+      { accessToken: 'token', httpClient, dedupeStore: sharedDedupeStore, apiBaseUrl: 'https://graph.facebook.com/v19.0' }
+    );
+    await sendCommentReplyBatch(
+      [createCommand({ externalCommentId: 'comment-b', idempotencyKey: 'shared-idem', content: { type: 'text', text: 'Second' } })],
+      { accessToken: 'token', httpClient, dedupeStore: sharedDedupeStore, apiBaseUrl: 'https://graph.facebook.com/v19.0' }
+    );
+
+    expect(httpClient).toHaveBeenCalledTimes(2);
+  });
+
   it('retries on 500 and succeeds on second attempt', async () => {
     const responses = [500, 200];
     const httpClient = vi.fn(async () => {
@@ -81,13 +133,12 @@ describe('sendCommentReplyBatch', () => {
 
     const results = await sendCommentReplyBatch(
       [
-        {
+        createCommand({
           externalCommentId: '1789_comment_retry',
           externalPostId: '1789_post_retry',
-          platform: 'instagram',
           content: { type: 'text', text: 'Retry message' },
-          tenantId: 'tenant-1'
-        }
+          idempotencyKey: 'reply-retry'
+        })
       ],
       {
         accessToken: 'token',
@@ -109,13 +160,12 @@ describe('sendCommentReplyBatch', () => {
 
     const results = await sendCommentReplyBatch(
       [
-        {
+        createCommand({
           externalCommentId: '1789_comment_timeout',
           externalPostId: '1789_post_timeout',
-          platform: 'instagram',
           content: { type: 'text', text: 'Timeout message' },
-          tenantId: 'tenant-1'
-        }
+          idempotencyKey: 'reply-timeout'
+        })
       ],
       {
         accessToken: 'token',
@@ -143,7 +193,8 @@ describe('sendCommentReplyBatch', () => {
             externalPostId: '1789_post_missing_store',
             platform: 'instagram',
             content: { type: 'text', text: 'Missing store' },
-            tenantId: 'tenant-1'
+            tenantId: 'tenant-1',
+            idempotencyKey: 'reply-missing-store'
           }
         ],
         {

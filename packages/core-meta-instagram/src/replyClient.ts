@@ -1,7 +1,6 @@
 import { createLogger, type Logger } from '@connectors/core-logging';
 import { type DedupeStore } from '@connectors/core-runtime';
 import { buildCommentReplyDedupeKey, CommentReplyCommandSchema, type CommentReplyCommand } from '@connectors/core-comments';
-import crypto from 'node:crypto';
 
 export interface HttpClient {
   (input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
@@ -35,26 +34,15 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function hashText(value: string): string {
-  return crypto.createHash('sha256').update(value).digest('hex').slice(0, 16);
-}
-
 /**
  * Build dedupe key for comment reply.
- * 
- * WARNING: If no idempotencyKey is provided, falls back to content hash.
- * This is NOT safe for production use cases where:
- * - The same comment may be replied to multiple times intentionally with different text
- * - Retries with modified text should be treated as new commands
- * 
- * RECOMMENDED: Always provide idempotencyKey from the caller (e.g., a unique command ID).
  */
 function buildDedupeKey(command: CommentReplyCommand): string {
-  if (command.idempotencyKey) return buildCommentReplyDedupeKey(command.platform, command.externalCommentId, command.idempotencyKey);
-  
-  // Fallback: use content hash (NOT recommended for production)
-  const contentHash = hashText(command.content.text);
-  return `instagram:reply:${command.externalCommentId}:${contentHash}`;
+  if (!command.idempotencyKey) {
+    throw new Error('idempotencyKey is required for comment replies to ensure stable dedupe keys');
+  }
+
+  return buildCommentReplyDedupeKey(command.platform, command.tenantId, command.externalCommentId, command.idempotencyKey);
 }
 
 async function sendOnce(

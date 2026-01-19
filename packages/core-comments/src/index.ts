@@ -126,7 +126,7 @@ export const CommentReplyCommandSchema = z.object({
   tenantId: z.string().min(1),
 
   /** Idempotency key */
-  idempotencyKey: z.string().optional()
+  idempotencyKey: z.string().min(1, 'idempotencyKey is required for outbound deduplication')
 });
 export type CommentReplyCommand = z.infer<typeof CommentReplyCommandSchema>;
 
@@ -166,11 +166,11 @@ export function buildCommentDedupeKey(platform: string, externalCommentId: strin
  */
 export function buildCommentReplyDedupeKey(
   platform: string,
+  tenantId: string,
   externalCommentId: string,
-  idempotencyKey?: string
+  idempotencyKey: string
 ): string {
-  const suffix = idempotencyKey ?? Date.now().toString(36);
-  return `${platform.toLowerCase()}:reply:${externalCommentId}:${suffix}`;
+  return `${platform.toLowerCase()}:tenant:${tenantId}:comment:${externalCommentId}:reply:${idempotencyKey}`;
 }
 
 /**

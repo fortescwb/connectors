@@ -29,7 +29,7 @@ const events = parseInstagramRuntimeRequest(runtimeRequest);
 
 - **Client**: `sendCommentReplyBatch()` - Send comment replies via Graph API v19.0
 - **Retry**: Configurable retry with exponential backoff (default: 3 attempts, 200ms base)
-- **Dedupe**: Caller-provided dedupe store; dedupe check happens before any HTTP call
+- **Dedupe**: Caller-provided dedupe store and mandatory `idempotencyKey`; dedupe check happens before any HTTP call
 - **Error Classification**: `client_error`, `retry_exhausted`, `timeout`, `network_error`
 - **Tests**: Unit tests for success, dedupe, retry, and timeout scenarios
 
@@ -38,7 +38,8 @@ const events = parseInstagramRuntimeRequest(runtimeRequest);
 ```typescript
 import { sendCommentReplyBatch } from '@connectors/core-meta-instagram';
 
-// Caller MUST provide a dedupeStore (runtime-managed). InMemoryDedupeStore is dev/single-process only.
+// Caller MUST provide a dedupeStore (runtime-managed) and an idempotencyKey per command.
+// InMemoryDedupeStore is dev/single-process only.
 const results = await sendCommentReplyBatch(
   [
     {
@@ -47,7 +48,7 @@ const results = await sendCommentReplyBatch(
       platform: 'instagram',
       content: { type: 'text', text: 'Thanks for your comment!' },
       tenantId: 'tenant_1',
-      idempotencyKey: 'reply_cmd_789' // RECOMMENDED: always provide
+      idempotencyKey: 'reply_cmd_789' // REQUIRED: stable command ID (e.g., UUID/ULID from caller)
     }
   ],
   {
@@ -66,14 +67,12 @@ const results = await sendCommentReplyBatch(
 - The client alone does **not** guarantee exactly-once; that property comes from `core-runtime` + a shared `dedupeStore`.
 - `fullyDeduped` is computed by the runtime using the provided store; the client simply respects the dedupe decision before sending.
 - No implicit DedupeStore is created inside the client—callers must inject a real store from the runtime/app layer.
+- `idempotencyKey` is REQUIRED per command; there is no fallback (content hashes/timestamps are rejected). Generate a stable command ID in the caller (e.g., UUID/ULID) and pass it through.
 
-**⚠️ IMPORTANT - Idempotency Key:**
+**⚠️ IMPORTANT - Idempotency Key (Required):**
 
-The `idempotencyKey` field is **STRONGLY RECOMMENDED** for production use. If omitted, the dedupe key falls back to a content hash, which has limitations:
-
-- ❌ Replying to the same comment with different text (intentionally) will be blocked
-- ❌ Retries with modified text will be treated as duplicates
-- ✅ With `idempotencyKey`: dedupe is based on command ID, not content
+- ❌ Without `idempotencyKey`, the client will throw to avoid unstable dedupe keys.
+- ✅ With `idempotencyKey`: dedupe is based on a caller-stable command ID combined with the target comment and tenant context.
 
 **Wiring Status**: **NOT yet integrated** in `apps/instagram`. The library code exists and is tested, but:
 
