@@ -21,6 +21,9 @@ export interface OutboundRuntimeOptions {
   dedupeTtlMs?: number;
   logger?: Logger;
   dedupeFailMode?: OutboundDedupeFailMode;
+  serviceName?: string;
+  connectorId?: string;
+  capabilityId?: string;
 }
 
 export type OutboundItemStatus = 'sent' | 'deduped' | 'failed';
@@ -34,6 +37,8 @@ export interface OutboundItemResult {
   status: OutboundItemStatus;
   errorCode?: 'dedupe_error_blocked' | 'dedupe_error_allowed' | 'send_failed';
   errorMessage?: string;
+  latencyMs?: number;
+  upstreamStatus?: number;
 }
 
 export interface OutboundBatchResult<TProviderResponse = unknown> {
