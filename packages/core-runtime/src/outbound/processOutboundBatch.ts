@@ -1,15 +1,20 @@
 import { createLogger, type Logger } from '@connectors/core-logging';
 
 import { DEFAULT_DEDUPE_TTL_MS } from '../constants.js';
-import { emitMetric, computeLatencyMs, type ObservabilityMetric } from '../observability/utils.js';
+import {
+  emitCounter,
+  emitHistogram,
+  emitSummary,
+  computeLatencyMs,
+  resolveConnectorForItem,
+  COUNTER_METRICS,
+  HISTOGRAM_METRICS,
+  SUMMARY_METRICS,
+  DEFAULT_CAPABILITIES
+} from '../observability/utils.js';
 import type { OutboundBatchResult, OutboundIntent, OutboundRuntimeOptions, OutboundSendFn } from './types.js';
 
-// OutboundMetric is a subset of ObservabilityMetric (excludes webhook_received_total)
-type OutboundMetric = Exclude<ObservabilityMetric, 'webhook_received_total'>;
-
-const OUTBOUND_CAPABILITY_ID = 'outbound_messages';
-
-// emitMetric and computeLatencyMs are now imported from observability/utils.ts
+const OUTBOUND_CAPABILITY_ID = DEFAULT_CAPABILITIES.OUTBOUND_MESSAGES;
 
 function buildLogger(
   baseLogger: Logger | undefined,
@@ -79,7 +84,8 @@ export async function processOutboundBatch<TIntent extends OutboundIntent, TProv
     capabilityId
   } = options;
   const service = serviceName ?? 'core-runtime';
-  const connector = connectorId ?? intents[0]?.provider ?? 'outbound';
+  // connectorId from options is used as batch-level fallback only
+  const batchConnectorFallback = connectorId;
   const capability = capabilityId ?? OUTBOUND_CAPABILITY_ID;
 
   const results: OutboundBatchResult<TProviderResponse>['results'] = [];
@@ -88,6 +94,14 @@ export async function processOutboundBatch<TIntent extends OutboundIntent, TProv
   for (const intent of intents) {
     const correlationId = intent.correlationId;
     const startedAt = Date.now();
+    
+    // Resolve connector PER ITEM from intent.provider (not batch-level)
+    const { connector: itemConnector } = resolveConnectorForItem({
+      intentProvider: intent.provider,
+      manifestId: batchConnectorFallback,
+      defaultConnector: 'outbound'
+    });
+    
     const itemLogger = buildLogger(
       logger,
       {
@@ -96,10 +110,10 @@ export async function processOutboundBatch<TIntent extends OutboundIntent, TProv
         provider: intent.provider,
         tenantId: intent.tenantId,
         capabilityId: capability,
-        connector,
+        connector: itemConnector,
         event: 'outbound_process_item'
       },
-      { service, connector, capabilityId: capability }
+      { service, connector: itemConnector, capabilityId: capability }
     );
 
     let dedupeError: Error | undefined;
@@ -129,12 +143,19 @@ export async function processOutboundBatch<TIntent extends OutboundIntent, TProv
 
       if (dedupeFailMode === 'open') {
         summary.deduped += 1;
-        emitMetric(itemLogger, 'event_deduped_total', 1, {
+        // Counter: no latencyMs
+        emitCounter(itemLogger, COUNTER_METRICS.EVENT_DEDUPED, 1, {
+          connector: itemConnector,
+          capabilityId: capability,
           outcome: 'deduped',
-          errorCode: dedupeErrorCode,
-          latencyMs
+          errorCode: dedupeErrorCode
         });
-        emitMetric(itemLogger, 'handler_latency_ms', latencyMs, { outcome: 'deduped' });
+        // Histogram: latencyMs as value
+        emitHistogram(itemLogger, HISTOGRAM_METRICS.HANDLER_LATENCY, latencyMs, {
+          connector: itemConnector,
+          capabilityId: capability,
+          outcome: 'deduped'
+        });
         results.push({
           intentId: intent.intentId,
           dedupeKey: intent.dedupeKey,
@@ -159,8 +180,18 @@ export async function processOutboundBatch<TIntent extends OutboundIntent, TProv
         latencyMs,
         toMasked: maskPhoneNumber(intent.to)
       });
-      emitMetric(itemLogger, 'event_deduped_total', 1, { outcome: 'deduped', latencyMs });
-      emitMetric(itemLogger, 'handler_latency_ms', latencyMs, { outcome: 'deduped' });
+      // Counter: no latencyMs
+      emitCounter(itemLogger, COUNTER_METRICS.EVENT_DEDUPED, 1, {
+        connector: itemConnector,
+        capabilityId: capability,
+        outcome: 'deduped'
+      });
+      // Histogram: latencyMs as value
+      emitHistogram(itemLogger, HISTOGRAM_METRICS.HANDLER_LATENCY, latencyMs, {
+        connector: itemConnector,
+        capabilityId: capability,
+        outcome: 'deduped'
+      });
       results.push({
         intentId: intent.intentId,
         dedupeKey: intent.dedupeKey,
@@ -186,13 +217,20 @@ export async function processOutboundBatch<TIntent extends OutboundIntent, TProv
         ...(dedupeErrorCode ? { errorCode: dedupeErrorCode } : {}),
         toMasked: maskPhoneNumber(intent.to)
       });
-      emitMetric(itemLogger, 'event_processed_total', 1, {
+      // Counter: no latencyMs
+      emitCounter(itemLogger, COUNTER_METRICS.EVENT_PROCESSED, 1, {
+        connector: itemConnector,
+        capabilityId: capability,
         outcome: 'sent',
-        latencyMs,
         ...(upstreamStatus ? { upstreamStatus } : {}),
         ...(dedupeErrorCode ? { errorCode: dedupeErrorCode } : {})
       });
-      emitMetric(itemLogger, 'handler_latency_ms', latencyMs, { outcome: 'sent' });
+      // Histogram: latencyMs as value
+      emitHistogram(itemLogger, HISTOGRAM_METRICS.HANDLER_LATENCY, latencyMs, {
+        connector: itemConnector,
+        capabilityId: capability,
+        outcome: 'sent'
+      });
       results.push({
         intentId: intent.intentId,
         dedupeKey: intent.dedupeKey,
@@ -219,13 +257,20 @@ export async function processOutboundBatch<TIntent extends OutboundIntent, TProv
         errorMessage: err.message,
         toMasked: maskPhoneNumber(intent.to)
       });
-      emitMetric(itemLogger, 'event_failed_total', 1, {
+      // Counter: no latencyMs
+      emitCounter(itemLogger, COUNTER_METRICS.EVENT_FAILED, 1, {
+        connector: itemConnector,
+        capabilityId: capability,
         outcome: 'failed',
         errorCode: dedupeErrorCode ?? 'send_failed',
-        latencyMs,
         ...(upstreamStatus ? { upstreamStatus } : {})
       });
-      emitMetric(itemLogger, 'handler_latency_ms', latencyMs, { outcome: 'failed' });
+      // Histogram: latencyMs as value
+      emitHistogram(itemLogger, HISTOGRAM_METRICS.HANDLER_LATENCY, latencyMs, {
+        connector: itemConnector,
+        capabilityId: capability,
+        outcome: 'failed'
+      });
       results.push({
         intentId: intent.intentId,
         dedupeKey: intent.dedupeKey,
@@ -241,10 +286,12 @@ export async function processOutboundBatch<TIntent extends OutboundIntent, TProv
     }
   }
 
+  // For batch summary, use the first intent's provider as connector (since we're summarizing the batch)
+  const summaryConnector = batchConnectorFallback ?? intents[0]?.provider ?? 'outbound';
   const summaryLogger = buildLogger(
     logger,
     { correlationId: intents[0]?.correlationId, event: 'outbound_batch_summary' },
-    { service, connector, capabilityId: capability }
+    { service, connector: summaryConnector, capabilityId: capability }
   );
   summaryLogger.info('Outbound batch summary', {
     metric: 'event_batch_summary',
@@ -254,7 +301,9 @@ export async function processOutboundBatch<TIntent extends OutboundIntent, TProv
     deduped: summary.deduped,
     failed: summary.failed
   });
-  emitMetric(summaryLogger, 'event_batch_summary', summary.total, {
+  emitSummary(summaryLogger, SUMMARY_METRICS.EVENT_BATCH_SUMMARY, summary.total, {
+    connector: summaryConnector,
+    capabilityId: capability,
     sent: summary.sent,
     deduped: summary.deduped,
     failed: summary.failed

@@ -15,17 +15,17 @@ export const instagramManifest: ConnectorManifest = {
 
   capabilities: [
     // Messaging (Instagram Direct)
-    capability('inbound_messages', 'active', 'Receive DMs via Instagram webhook'),
+    capability('inbound_messages', 'planned', 'Receive DMs via Instagram webhook'),
     capability('outbound_messages', 'planned', 'Send DMs via Graph API'),
     capability('message_status_updates', 'planned', 'Receive message delivery status'),
 
     // Comments & Engagement
-    capability('comment_ingest', 'active', 'Receive comments on posts/reels'),
+    capability('comment_ingest', 'planned', 'Receive comments on posts/reels'),
     capability('comment_reply', 'planned', 'Reply to comments via Graph API'),
     capability('reaction_ingest', 'planned', 'Receive reactions on stories'),
 
     // Ads & Leads
-    capability('ads_leads_ingest', 'active', 'Receive leads from Instagram Lead Ads'),
+    capability('ads_leads_ingest', 'planned', 'Receive leads from Instagram Lead Ads'),
 
     // Health & Admin
     capability('webhook_verification', 'active', 'Meta webhook verification endpoint'),

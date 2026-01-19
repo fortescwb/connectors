@@ -13,7 +13,18 @@
 import type { ConnectorManifest, CapabilityId } from '@connectors/core-connectors';
 import { createLogger, type Logger, type LoggerContext } from '@connectors/core-logging';
 import { DEFAULT_DEDUPE_TTL_MS } from './constants.js';
-import { emitMetric, computeLatencyMs, type ObservabilityMetric } from './observability/utils.js';
+import {
+  emitCounter,
+  emitHistogram,
+  emitSummary,
+  emitMetric,
+  computeLatencyMs,
+  resolveConnectorForItem,
+  COUNTER_METRICS,
+  HISTOGRAM_METRICS,
+  SUMMARY_METRICS,
+  type ObservabilityMetric
+} from './observability/utils.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES: Requests and Responses
@@ -246,6 +257,12 @@ export interface ParsedEvent<TPayload = unknown> {
   dedupeKey: string;
   correlationId?: string;
   tenant?: string;
+  /**
+   * Optional connector ID for this specific event.
+   * When provided, this takes precedence over manifest.id for observability.
+   * Useful when a single webhook can receive events from multiple connectors.
+   */
+  connector?: string;
   payload: TPayload;
 }
 
@@ -622,15 +639,23 @@ export function buildWebhookHandlers<TPayload = unknown>(
     // Step 6: Process each event sequentially for deterministic logging
     for (const event of events) {
       const eventCorrelationId = event.correlationId ?? correlationId;
+      
+      // Resolve connector PER ITEM (not batch-level)
+      const { connector: itemConnector } = resolveConnectorForItem({
+        itemConnector: event.connector,
+        manifestId: manifest.id
+      });
+      
       const eventLogger = buildScopedLogger({
         correlationId: eventCorrelationId,
+        connector: itemConnector,
         capabilityId: event.capabilityId,
         dedupeKey: event.dedupeKey,
         ...(event.tenant && { tenantId: event.tenant })
       } as LoggerContext);
       const ctx: RuntimeContext = {
         correlationId: eventCorrelationId,
-        connector: manifest.id,
+        connector: itemConnector,
         tenant: event.tenant,
         deduped: false,
         dedupeKey: event.dedupeKey,
@@ -641,7 +666,12 @@ export function buildWebhookHandlers<TPayload = unknown>(
       const handler = registry[event.capabilityId];
       const startedAt = Date.now();
 
-      emitMetric(eventLogger, 'webhook_received_total', 1, { outcome: 'received' });
+      // Counter: webhook received (no latencyMs)
+      emitCounter(eventLogger, COUNTER_METRICS.WEBHOOK_RECEIVED, 1, {
+        connector: itemConnector,
+        capabilityId: event.capabilityId,
+        outcome: 'received'
+      });
 
       const isDuplicate = await dedupeStore.checkAndMark(event.dedupeKey, dedupeTtlMs);
 
@@ -655,8 +685,18 @@ export function buildWebhookHandlers<TPayload = unknown>(
           outcome: 'deduped',
           latencyMs
         });
-        emitMetric(eventLogger, 'event_deduped_total', 1, { outcome: 'deduped', latencyMs });
-        emitMetric(eventLogger, 'handler_latency_ms', latencyMs, { outcome: 'deduped' });
+        // Counter: no latencyMs
+        emitCounter(eventLogger, COUNTER_METRICS.EVENT_DEDUPED, 1, {
+          connector: itemConnector,
+          capabilityId: event.capabilityId,
+          outcome: 'deduped'
+        });
+        // Histogram: latencyMs as value
+        emitHistogram(eventLogger, HISTOGRAM_METRICS.HANDLER_LATENCY, latencyMs, {
+          connector: itemConnector,
+          capabilityId: event.capabilityId,
+          outcome: 'deduped'
+        });
         results.push({
           capabilityId: event.capabilityId,
           dedupeKey: event.dedupeKey,
@@ -677,12 +717,19 @@ export function buildWebhookHandlers<TPayload = unknown>(
           errorCode: 'NO_HANDLER',
           latencyMs
         });
-        emitMetric(eventLogger, 'event_failed_total', 1, {
+        // Counter: no latencyMs
+        emitCounter(eventLogger, COUNTER_METRICS.EVENT_FAILED, 1, {
+          connector: itemConnector,
+          capabilityId: event.capabilityId,
           outcome: 'failed',
-          errorCode: 'NO_HANDLER',
-          latencyMs
+          errorCode: 'NO_HANDLER'
         });
-        emitMetric(eventLogger, 'handler_latency_ms', latencyMs, { outcome: 'failed' });
+        // Histogram: latencyMs as value
+        emitHistogram(eventLogger, HISTOGRAM_METRICS.HANDLER_LATENCY, latencyMs, {
+          connector: itemConnector,
+          capabilityId: event.capabilityId,
+          outcome: 'failed'
+        });
         results.push({
           capabilityId: event.capabilityId,
           dedupeKey: event.dedupeKey,
@@ -705,8 +752,18 @@ export function buildWebhookHandlers<TPayload = unknown>(
           outcome: 'processed',
           latencyMs
         });
-        emitMetric(eventLogger, 'event_processed_total', 1, { outcome: 'processed', latencyMs });
-        emitMetric(eventLogger, 'handler_latency_ms', latencyMs, { outcome: 'processed' });
+        // Counter: no latencyMs
+        emitCounter(eventLogger, COUNTER_METRICS.EVENT_PROCESSED, 1, {
+          connector: itemConnector,
+          capabilityId: event.capabilityId,
+          outcome: 'processed'
+        });
+        // Histogram: latencyMs as value
+        emitHistogram(eventLogger, HISTOGRAM_METRICS.HANDLER_LATENCY, latencyMs, {
+          connector: itemConnector,
+          capabilityId: event.capabilityId,
+          outcome: 'processed'
+        });
         results.push({
           capabilityId: event.capabilityId,
           dedupeKey: event.dedupeKey,
@@ -727,12 +784,19 @@ export function buildWebhookHandlers<TPayload = unknown>(
           latencyMs,
           errorCode: 'HANDLER_FAILED'
         });
-        emitMetric(eventLogger, 'event_failed_total', 1, {
+        // Counter: no latencyMs
+        emitCounter(eventLogger, COUNTER_METRICS.EVENT_FAILED, 1, {
+          connector: itemConnector,
+          capabilityId: event.capabilityId,
           outcome: 'failed',
-          errorCode: 'HANDLER_FAILED',
-          latencyMs
+          errorCode: 'HANDLER_FAILED'
         });
-        emitMetric(eventLogger, 'handler_latency_ms', latencyMs, { outcome: 'failed' });
+        // Histogram: latencyMs as value
+        emitHistogram(eventLogger, HISTOGRAM_METRICS.HANDLER_LATENCY, latencyMs, {
+          connector: itemConnector,
+          capabilityId: event.capabilityId,
+          outcome: 'failed'
+        });
         results.push({
           capabilityId: event.capabilityId,
           dedupeKey: event.dedupeKey,
@@ -745,7 +809,7 @@ export function buildWebhookHandlers<TPayload = unknown>(
       }
     }
 
-    const summaryLogger = buildScopedLogger({ correlationId, capabilityId: summaryCapabilityId } as LoggerContext);
+    const summaryLogger = buildScopedLogger({ correlationId, connector: manifest.id, capabilityId: summaryCapabilityId } as LoggerContext);
     summaryLogger.info('Inbound batch summary', {
       metric: 'event_batch_summary',
       outcome: 'summary',
@@ -755,7 +819,8 @@ export function buildWebhookHandlers<TPayload = unknown>(
       deduped: summary.deduped,
       failed: summary.failed
     });
-    emitMetric(summaryLogger, 'event_batch_summary', summary.total, {
+    emitSummary(summaryLogger, SUMMARY_METRICS.EVENT_BATCH_SUMMARY, summary.total, {
+      connector: manifest.id,
       capabilityId: summaryCapabilityId,
       processed: summary.processed,
       deduped: summary.deduped,
@@ -774,6 +839,29 @@ export function buildWebhookHandlers<TPayload = unknown>(
 // ─────────────────────────────────────────────────────────────────────────────
 
 export { DEFAULT_DEDUPE_TTL_MS };
+
+// Re-export observability types and functions
+export {
+  emitCounter,
+  emitHistogram,
+  emitSummary,
+  emitMetric,
+  computeLatencyMs,
+  resolveConnectorForItem,
+  COUNTER_METRICS,
+  HISTOGRAM_METRICS,
+  SUMMARY_METRICS,
+  type ObservabilityMetric,
+  type CounterMetricName,
+  type HistogramMetricName,
+  type SummaryMetricName,
+  type CounterLabels,
+  type HistogramLabels,
+  type SummaryLabels,
+  type ConnectorId,
+  type ConnectorResolution,
+  type ConnectorResolutionOptions
+} from './observability/utils.js';
 
 // Re-export Redis DedupeStore for distributed environments
 export {

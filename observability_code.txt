@@ -1,0 +1,36 @@
+
+The following code snippets are extracted from the current `main` branch of the `core-runtime` implementation to illustrate the issues discussed (Batch-level `connector` assignment and inclusion of `latencyMs` in event metrics):
+
+```
+// packages/core-runtime/src/outbound/processOutboundBatch.ts
+const connector = connectorId ?? intents[0]?.provider ?? 'outbound';
+...
+// In dedupe error path, metric includes latencyMs in context
+emitMetric(itemLogger, 'event_deduped_total', 1, {
+  outcome: 'deduped',
+  errorCode: dedupeErrorCode,
+  latencyMs
+});
+...
+// In send success path, event_processed_total includes latencyMs and upstreamStatus in context
+emitMetric(itemLogger, 'event_processed_total', 1, {
+  outcome: 'sent',
+  latencyMs,
+  ...(upstreamStatus ? { upstreamStatus } : {}),
+  ...(dedupeErrorCode ? { errorCode: dedupeErrorCode } : {})
+});
+
+// packages/core-runtime/src/index.ts (inbound pipeline)
+// In duplicate event path, latencyMs is added to context of event_deduped_total
+emitMetric(eventLogger, 'event_deduped_total', 1, { outcome: 'deduped', latencyMs });
+// No handler path: event_failed_total includes errorCode and latencyMs
+emitMetric(eventLogger, 'event_failed_total', 1, {
+  outcome: 'failed',
+  errorCode: 'NO_HANDLER',
+  latencyMs
+});
+// Success path: event_processed_total includes latencyMs
+emitMetric(eventLogger, 'event_processed_total', 1, { outcome: 'processed', latencyMs });
+```
+
+These snippets demonstrate that the outbound pipeline still assigns the `connector` based on the first intent (`intents[0]?.provider`) and includes `latencyMs` in the context of count metrics (`event_deduped_total`, `event_processed_total`, `event_failed_total`) instead of reserving latency only for `handler_latency_ms`.
