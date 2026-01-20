@@ -17,6 +17,11 @@ This package encapsulates all Meta-specific WhatsApp payload handling:
 - Observability is centralized in the Graph client: structured logs only with metadata (`endpoint`, `status`, `latencyMs`, `fbtraceId`), never payloads/PII.
 - Channel-specific parsing/schema stays here; only the HTTP/Graph layer is shared across Meta connectors.
 
+### Outbound (Graph + runtime dedupe)
+- Build dedupe keys with `buildWhatsAppOutboundDedupeKey(tenantId, intentId)` from `@connectors/core-messaging` to avoid embedding phone numbers in the dedupe store.
+- The runtime (`core-runtime/processOutboundBatch`) performs dedupe **before** any HTTP side-effect; the same `intentId` is used as `client_msg_id` in the Graph payload for provider-side idempotency.
+- Distributed dedupe (Redis) is covered by integration tests with concurrent runtime instances to ensure only one send occurs per intent, even on retries/timeouts.
+
 ## Installation
 
 ```bash

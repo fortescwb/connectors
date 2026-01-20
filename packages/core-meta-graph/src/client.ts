@@ -1,7 +1,7 @@
 import { createLogger, type Logger } from '@connectors/core-logging';
 import { calculateBackoffDelay, sleep, type BackoffConfig } from '@connectors/core-rate-limit';
 
-import { buildGraphUrl, DEFAULT_API_VERSION, DEFAULT_BASE_URL, maskNumeric } from './helpers.js';
+import { buildGraphUrl, DEFAULT_API_VERSION, DEFAULT_BASE_URL, sanitizeGraphErrorMessage } from './helpers.js';
 import { buildMetaGraphError, MetaGraphClientError, MetaGraphError, MetaGraphNetworkError, MetaGraphTimeoutError } from './errors.js';
 
 export type GraphTransport = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -104,19 +104,20 @@ function normalizeError(error: unknown, status?: number, body?: unknown, headers
   }
 
   if (error instanceof Error) {
-    const message = error.message || 'Meta Graph request failed';
-    if (error.name === 'AbortError' || message.toLowerCase().includes('timeout')) {
-      return new MetaGraphTimeoutError(message, { status, raw: body });
+    const rawMessage = error.message || 'Meta Graph request failed';
+    const safeMessage = sanitizeGraphErrorMessage(rawMessage);
+    if (error.name === 'AbortError' || rawMessage.toLowerCase().includes('timeout')) {
+      return new MetaGraphTimeoutError(safeMessage, { status, raw: body });
     }
 
     if (!status) {
-      return new MetaGraphNetworkError(message, { status, raw: body });
+      return new MetaGraphNetworkError(safeMessage, { status, raw: body });
     }
 
-    return buildMetaGraphError(message, status, body, headers);
+    return buildMetaGraphError(safeMessage, status, body, headers);
   }
 
-  return buildMetaGraphError('Meta Graph request failed', status, body, headers);
+  return buildMetaGraphError(sanitizeGraphErrorMessage('Meta Graph request failed'), status, body, headers);
 }
 
 function buildLogger(config: GraphClientConfig): Logger {
@@ -195,7 +196,7 @@ export function createGraphClient(config: GraphClientConfig): GraphClient {
             status: response.status,
             attempt: attempt + 1,
             latencyMs,
-            retryable: false
+            isRetryable: false
           });
 
           return {
@@ -216,19 +217,19 @@ export function createGraphClient(config: GraphClientConfig): GraphClient {
         );
 
         const latencyMs = Date.now() - startedAt;
-          logger.warn('meta graph request failed', {
-            ...context,
-            channel: baseContext.channel,
-            status: graphError.status ?? response.status,
-            attempt: attempt + 1,
-            latencyMs,
-          retryable: graphError.retryable,
+        logger.warn('meta graph request failed', {
+          ...context,
+          channel: baseContext.channel,
+          status: graphError.status ?? response.status,
+          attempt: attempt + 1,
+          latencyMs,
+          isRetryable: graphError.retryable,
           retryAfterMs: graphError.retryAfterMs,
           errorCode: graphError.code,
           graphCode: graphError.graphCode,
           graphSubcode: graphError.graphSubcode,
           fbtraceId: graphError.fbtraceId,
-          errorMessage: maskNumeric(graphError.message ?? '')
+          safeErrorMessage: sanitizeGraphErrorMessage(graphError.message ?? '')
         });
 
         if (!graphError.retryable || attempt >= maxRetries) {
@@ -260,13 +261,13 @@ export function createGraphClient(config: GraphClientConfig): GraphClient {
           status: graphError.status,
           attempt: attempt + 1,
           latencyMs,
-          retryable: graphError.retryable,
+          isRetryable: graphError.retryable,
           retryAfterMs: graphError.retryAfterMs,
           errorCode: graphError.code,
           graphCode: graphError.graphCode,
           graphSubcode: graphError.graphSubcode,
           fbtraceId: graphError.fbtraceId,
-          errorMessage: maskNumeric(graphError.message ?? '')
+          safeErrorMessage: sanitizeGraphErrorMessage(graphError.message ?? '')
         });
 
         if (graphError instanceof MetaGraphClientError || !graphError.retryable || attempt >= maxRetries) {

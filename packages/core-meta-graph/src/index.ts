@@ -13,7 +13,8 @@ export {
   DEFAULT_BASE_URL,
   maskAccessToken,
   maskNumeric,
-  parseRetryAfter
+  parseRetryAfter,
+  sanitizeGraphErrorMessage
 } from './helpers.js';
 export {
   buildMetaGraphError,

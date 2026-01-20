@@ -1,5 +1,6 @@
 export const DEFAULT_BASE_URL = 'https://graph.facebook.com';
 export const DEFAULT_API_VERSION = 'v19.0';
+const MAX_ERROR_MESSAGE_LENGTH = 200;
 
 function trimSlashes(value: string): string {
   return value.replace(/\/+$/, '');
@@ -85,4 +86,26 @@ export function parseRetryAfter(retryAfter: string | null): number | undefined {
   }
 
   return undefined;
+}
+
+function truncate(message: string, maxLength: number): string {
+  return message.length <= maxLength ? message : `${message.slice(0, maxLength)}...`;
+}
+
+/**
+ * Sanitize provider error messages before logging or surfacing them.
+ * - Masks long alphanumeric tokens (e.g., access tokens, JWTs)
+ * - Masks phone numbers and other numeric identifiers
+ * - Truncates to a bounded length to avoid payload leaks
+ */
+export function sanitizeGraphErrorMessage(message: unknown): string {
+  if (typeof message !== 'string') {
+    if (message === undefined || message === null) return '';
+    return sanitizeGraphErrorMessage(String(message));
+  }
+
+  const truncated = truncate(message, MAX_ERROR_MESSAGE_LENGTH);
+  const maskedTokens = truncated.replace(/[A-Za-z0-9]{24,}/g, (token) => maskAccessToken(token));
+
+  return maskNumeric(maskedTokens);
 }

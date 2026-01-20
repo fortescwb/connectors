@@ -6,7 +6,8 @@ import {
   DEFAULT_BASE_URL,
   maskAccessToken,
   maskNumeric,
-  parseRetryAfter
+  parseRetryAfter,
+  sanitizeGraphErrorMessage
 } from '../src/index.js';
 
 describe('buildGraphUrl', () => {
@@ -34,6 +35,21 @@ describe('maskers', () => {
 
   it('masks numeric strings to avoid PII leakage', () => {
     expect(maskNumeric('call to +15551234567 failed')).toBe('call to +*********67 failed');
+  });
+
+  it('sanitizes provider error messages (tokens, numbers, truncation)', () => {
+    const sanitized = sanitizeGraphErrorMessage(
+      'HTTP 400 for +15551234567 with token EAABCD123456789012345678901234567890'
+    );
+    expect(sanitized).toContain('+*********67');
+    expect(sanitized).toContain('EAAB...');
+  });
+
+  it('truncates overly long messages', () => {
+    const long = 'X'.repeat(250);
+    const sanitized = sanitizeGraphErrorMessage(long);
+    expect(sanitized.endsWith('...')).toBe(true);
+    expect(sanitized.length).toBeLessThanOrEqual(203);
   });
 });
 

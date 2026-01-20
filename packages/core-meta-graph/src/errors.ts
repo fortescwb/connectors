@@ -1,4 +1,4 @@
-import { parseRetryAfter } from './helpers.js';
+import { parseRetryAfter, sanitizeGraphErrorMessage } from './helpers.js';
 
 export type MetaGraphErrorCode =
   | 'auth_error'
@@ -192,6 +192,7 @@ export function buildMetaGraphError(
   body: unknown,
   headers?: Headers | Record<string, string>
 ): MetaGraphError {
+  const safeMessage = sanitizeGraphErrorMessage(message);
   const graphError = extractGraphError(body);
   const classification = classifyError(status, graphError, headers);
   const opts: MetaGraphErrorOptions = {
@@ -204,19 +205,19 @@ export function buildMetaGraphError(
 
   switch (classification.code) {
     case 'auth_error':
-      return new MetaGraphAuthError(message, opts);
+      return new MetaGraphAuthError(safeMessage, opts);
     case 'rate_limit':
-      return new MetaGraphRateLimitError(message, opts);
+      return new MetaGraphRateLimitError(safeMessage, opts);
     case 'client_error':
-      return new MetaGraphClientError(message, opts);
+      return new MetaGraphClientError(safeMessage, opts);
     case 'server_error':
-      return new MetaGraphServerError(message, opts);
+      return new MetaGraphServerError(safeMessage, opts);
     case 'network_error':
-      return new MetaGraphNetworkError(message, opts);
+      return new MetaGraphNetworkError(safeMessage, opts);
     case 'timeout':
-      return new MetaGraphTimeoutError(message, opts);
+      return new MetaGraphTimeoutError(safeMessage, opts);
     case 'unknown_error':
     default:
-      return new MetaGraphUnknownError(message, opts);
+      return new MetaGraphUnknownError(safeMessage, opts);
   }
 }
