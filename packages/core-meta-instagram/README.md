@@ -30,7 +30,7 @@ const events = parseInstagramRuntimeRequest(runtimeRequest);
 - **Client**: `sendCommentReplyBatch()` - Send comment replies via Graph API v19.0
 - **Graph base**: Reuses `@connectors/core-meta-graph` for headers/auth, retry/backoff (429/5xx/is_transient), and error normalization (`MetaGraphError`)
 - **Retry**: Configurable retry with exponential backoff (default: 3 attempts, 200ms base)
-- **Dedupe**: Caller-provided dedupe store and mandatory `idempotencyKey`; dedupe check happens before any HTTP call
+- **Dedupe**: Caller-provided dedupe store; dedupe key is anchored on `pageId + externalCommentId` (idempotencyKey is still mandatory but no longer the dedupe discriminator)
 - **Error Classification**: `client_error`, `retry_exhausted`, `timeout`, `network_error`
 - **Tests**: Unit tests for success, dedupe, retry, and timeout scenarios
 
@@ -46,6 +46,7 @@ const results = await sendCommentReplyBatch(
     {
       externalCommentId: 'comment_123',
       externalPostId: 'post_456',
+      pageId: 'page_789',
       platform: 'instagram',
       content: { type: 'text', text: 'Thanks for your comment!' },
       tenantId: 'tenant_1',
@@ -69,6 +70,7 @@ const results = await sendCommentReplyBatch(
 - `fullyDeduped` is computed by the runtime using the provided store; the client simply respects the dedupe decision before sending.
 - No implicit DedupeStore is created inside the client—callers must inject a real store from the runtime/app layer.
 - `idempotencyKey` is REQUIRED per command; there is no fallback (content hashes/timestamps are rejected). Generate a stable command ID in the caller (e.g., UUID/ULID) and pass it through.
+- Dedupe keys are built as `instagram:tenant:{tenantId}:page:{pageId}:comment:{externalCommentId}:reply`, so reprocessing the same comment on the same page is skipped even if the upstream idempotencyKey changes. The idempotencyKey is forwarded as an `Idempotency-Key` header on every retry for provider-side safety.
 
 **⚠️ IMPORTANT - Idempotency Key (Required):**
 
@@ -125,7 +127,7 @@ pnpm format  # Prettier
 | Feature | Status | Wired in App | Tests |
 |---------|--------|--------------|-------|
 | Instagram DM Inbound | ✅ Active | ✅ Yes | ✅ 4 unit + 17 integration |
-| Comment Reply Client | 🚧 Library Only | ❌ No | ✅ 4 unit |
+| Comment Reply Client | 🚧 Library Only | ❌ No | ✅ unit + integration (dedupe/idempotency) |
 
 ---
 

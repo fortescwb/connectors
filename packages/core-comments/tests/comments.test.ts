@@ -72,6 +72,7 @@ describe('core-comments', () => {
       const command = {
         externalCommentId: 'comment-123',
         externalPostId: 'post-456',
+        pageId: 'page-789',
         platform: 'instagram',
         content: { type: 'text', text: 'Thanks for your comment!' },
         tenantId: 'tenant-1',
@@ -86,6 +87,7 @@ describe('core-comments', () => {
       const invalid = {
         externalCommentId: 'comment-123',
         externalPostId: 'post-456',
+        pageId: 'page-789',
         platform: 'instagram',
         content: { type: 'text', text: '' },
         tenantId: 'tenant-1',
@@ -98,6 +100,7 @@ describe('core-comments', () => {
       const invalid = {
         externalCommentId: 'comment-123',
         externalPostId: 'post-456',
+        pageId: 'page-789',
         platform: 'instagram',
         content: { type: 'text', text: 'Hello' },
         tenantId: 'tenant-1'
@@ -114,9 +117,9 @@ describe('core-comments', () => {
   });
 
   describe('buildCommentReplyDedupeKey', () => {
-    it('builds key with idempotency key', () => {
-      const key = buildCommentReplyDedupeKey('instagram', 'tenant-1', 'comment-123', 'idem-456');
-      expect(key).toBe('instagram:tenant:tenant-1:comment:comment-123:reply:idem-456');
+    it('builds key anchored on page and comment', () => {
+      const key = buildCommentReplyDedupeKey('instagram', 'tenant-1', 'page-789', 'comment-123');
+      expect(key).toBe('instagram:tenant:tenant-1:page:page-789:comment:comment-123:reply');
     });
   });
 

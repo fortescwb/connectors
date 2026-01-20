@@ -113,6 +113,9 @@ export const CommentReplyCommandSchema = z.object({
   /** External post ID (for context) */
   externalPostId: z.string().min(1),
 
+  /** Page/IG Business ID owning the comment */
+  pageId: z.string().min(1, 'pageId is required for stable dedupe'),
+
   /** Platform */
   platform: z.string().min(1),
 
@@ -167,10 +170,10 @@ export function buildCommentDedupeKey(platform: string, externalCommentId: strin
 export function buildCommentReplyDedupeKey(
   platform: string,
   tenantId: string,
-  externalCommentId: string,
-  idempotencyKey: string
+  pageId: string,
+  externalCommentId: string
 ): string {
-  return `${platform.toLowerCase()}:tenant:${tenantId}:comment:${externalCommentId}:reply:${idempotencyKey}`;
+  return `${platform.toLowerCase()}:tenant:${tenantId}:page:${pageId}:comment:${externalCommentId}:reply`;
 }
 
 /**

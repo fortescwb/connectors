@@ -1,4 +1,10 @@
-import { createGraphClient, MetaGraphError, type GraphClient, type GraphTransport } from '@connectors/core-meta-graph';
+import {
+  createGraphClient,
+  MetaGraphError,
+  sanitizeGraphErrorMessage,
+  type GraphClient,
+  type GraphTransport
+} from '@connectors/core-meta-graph';
 import { createLogger, type Logger } from '@connectors/core-logging';
 import { type DedupeStore } from '@connectors/core-runtime';
 import { buildCommentReplyDedupeKey, CommentReplyCommandSchema, type CommentReplyCommand } from '@connectors/core-comments';
@@ -30,17 +36,6 @@ export interface SendCommentReplyResult {
 const DEFAULT_ATTEMPTS = 3;
 const DEFAULT_BACKOFF_MS = 200;
 
-/**
- * Build dedupe key for comment reply.
- */
-function buildDedupeKey(command: CommentReplyCommand): string {
-  if (!command.idempotencyKey) {
-    throw new Error('idempotencyKey is required for comment replies to ensure stable dedupe keys');
-  }
-
-  return buildCommentReplyDedupeKey(command.platform, command.tenantId, command.externalCommentId, command.idempotencyKey);
-}
-
 function mapRetry(retry?: SendCommentReplyBatchOptions['retry']) {
   const attempts = retry?.attempts ?? DEFAULT_ATTEMPTS;
   const backoffMs = retry?.backoffMs ?? DEFAULT_BACKOFF_MS;
@@ -59,9 +54,16 @@ async function sendCommentReply(
   logger: Logger
 ): Promise<SendCommentReplyResult> {
   try {
-    const response = await client.post<{ id?: string }>(`${command.externalCommentId}/replies`, new URLSearchParams({ message: command.content.text }), {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-    });
+    const response = await client.post<{ id?: string }>(
+      `${command.externalCommentId}/replies`,
+      new URLSearchParams({ message: command.content.text }),
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Idempotency-Key': command.idempotencyKey
+        }
+      }
+    );
     const status = response.status;
     const json = (response.data as { id?: string } | undefined) ?? {};
     return { success: true, externalReplyId: json.id, status };
@@ -89,8 +91,9 @@ async function sendCommentReply(
     }
 
     const message = error instanceof Error ? error.message : String(error);
-    logger.warn('Meta Graph transport failure for comment reply', { error: message });
-    return { success: false, errorCode: 'network_error', errorMessage: message };
+    const safeMessage = sanitizeGraphErrorMessage(message);
+    logger.warn('Meta Graph transport failure for comment reply', { error: safeMessage });
+    return { success: false, errorCode: 'network_error', errorMessage: safeMessage };
   }
 }
 
@@ -124,7 +127,7 @@ export async function sendCommentReplyBatch(
   const results: SendCommentReplyResult[] = [];
 
   for (const command of validated) {
-    const dedupeKey = buildDedupeKey(command);
+    const dedupeKey = buildCommentReplyDedupeKey(command.platform, command.tenantId, command.pageId, command.externalCommentId);
     let isDuplicate = false;
     try {
       isDuplicate = await dedupeStore.checkAndMark(dedupeKey, dedupeTtlMs);
