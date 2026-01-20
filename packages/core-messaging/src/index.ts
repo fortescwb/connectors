@@ -2,5 +2,6 @@ export type { OutboundMessageIntent, OutboundMessagePayload } from './outbound/O
 export {
   OutboundMessageIntentSchema,
   OutboundMessagePayloadSchema,
-  TextMessagePayloadSchema
+  TextMessagePayloadSchema,
+  buildWhatsAppOutboundDedupeKey
 } from './outbound/OutboundMessageIntent.js';

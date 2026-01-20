@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { OutboundMessageIntentSchema } from '../src/outbound/OutboundMessageIntent.js';
+import { OutboundMessageIntentSchema, buildWhatsAppOutboundDedupeKey } from '../src/outbound/OutboundMessageIntent.js';
 
 const baseIntent = {
   intentId: '550e8400-e29b-41d4-a716-446655440000',
@@ -90,5 +90,19 @@ describe('OutboundMessageIntentSchema', () => {
         payload: { type: 'text' as const, text: 'Check this link', previewUrl: 'yes' as never }
       })
     ).toThrow();
+  });
+});
+
+describe('buildWhatsAppOutboundDedupeKey', () => {
+  it('builds a deterministic key without exposing PII', () => {
+    const key = buildWhatsAppOutboundDedupeKey('tenant-1', 'intent-abc');
+    expect(key).toBe('whatsapp:tenant:tenant-1:intent:intent-abc');
+  });
+
+  it('trims inputs and rejects empty values', () => {
+    const key = buildWhatsAppOutboundDedupeKey('  tenant-2  ', '  intent-xyz  ');
+    expect(key).toBe('whatsapp:tenant:tenant-2:intent:intent-xyz');
+    expect(() => buildWhatsAppOutboundDedupeKey('', 'intent')).toThrow(/tenantId/);
+    expect(() => buildWhatsAppOutboundDedupeKey('tenant', '')).toThrow(/intentId/);
   });
 });

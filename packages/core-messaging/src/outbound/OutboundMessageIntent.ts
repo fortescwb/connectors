@@ -33,3 +33,26 @@ export const OutboundMessageIntentSchema = z.object({
 });
 
 export type OutboundMessageIntent = z.infer<typeof OutboundMessageIntentSchema>;
+
+/**
+ * Build a deterministic dedupe key for WhatsApp outbound intents.
+ *
+ * Stable inputs:
+ * - tenantId: canonical tenant identifier
+ * - intentId: upstream-generated UUID/ULID (also used as client_msg_id)
+ *
+ * Excludes the recipient phone number to avoid persisting PII in the dedupe store.
+ */
+export function buildWhatsAppOutboundDedupeKey(tenantId: string, intentId: string): string {
+  if (!tenantId || !tenantId.trim()) {
+    throw new Error('tenantId is required to build a WhatsApp outbound dedupe key');
+  }
+  if (!intentId || !intentId.trim()) {
+    throw new Error('intentId is required to build a WhatsApp outbound dedupe key');
+  }
+
+  const normalizedTenant = tenantId.trim();
+  const normalizedIntent = intentId.trim();
+
+  return `whatsapp:tenant:${normalizedTenant}:intent:${normalizedIntent}`;
+}

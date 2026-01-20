@@ -3,7 +3,7 @@ import { GenericContainer, Wait, type StartedTestContainer } from 'testcontainer
 import { createClient, type RedisClientType } from 'redis';
 import { randomUUID } from 'node:crypto';
 
-import type { OutboundMessageIntent } from '@connectors/core-messaging';
+import { buildWhatsAppOutboundDedupeKey, type OutboundMessageIntent } from '@connectors/core-messaging';
 
 import { processOutboundBatch } from '../src/outbound/processOutboundBatch.js';
 import type { OutboundBatchResult } from '../src/outbound/types.js';
@@ -91,11 +91,12 @@ const createMemoryLogger = (sink: LogEntry[]) => ({
 
 const makeIntent = (overrides: Partial<OutboundMessageIntent> = {}): OutboundMessageIntent => {
   const intentId = overrides.intentId ?? randomUUID();
-  const dedupeKey = overrides.dedupeKey ?? `whatsapp:tenant-outbound:${intentId}`;
+  const tenantId = overrides.tenantId ?? 'tenant-outbound';
+  const dedupeKey = overrides.dedupeKey ?? buildWhatsAppOutboundDedupeKey(tenantId, intentId);
 
   return {
     intentId,
-    tenantId: 'tenant-outbound',
+    tenantId,
     provider: 'whatsapp',
     to: '+15551234567',
     payload: { type: 'text', text: 'hello world' },
@@ -165,10 +166,43 @@ if (!redisSetup.ok) {
       const hasCorrelation = itemLogs.some((entry) => entry.correlationId === intent.correlationId);
       const hasDedupeKey = itemLogs.some((entry) => entry.dedupeKey === intent.dedupeKey);
       const hasStatuses = itemLogs.some((entry) => entry.status === 'sent') && itemLogs.some((entry) => entry.status === 'deduped');
+      const hasOutcomes = itemLogs.some((entry) => entry.outcome === 'sent') && itemLogs.some((entry) => entry.outcome === 'deduped');
 
       expect(hasCorrelation).toBe(true);
       expect(hasDedupeKey).toBe(true);
       expect(hasStatuses).toBe(true);
+      expect(hasOutcomes).toBe(true);
+    });
+
+    it('blocks duplicate provider calls when a timed-out intent is retried', async () => {
+      const keyPrefix = makeKeyPrefix();
+      const store = new RedisDedupeStore({ client: createAdapter(redisSetup.clientA), keyPrefix, failMode: 'open' });
+      const logs: LogEntry[] = [];
+      const logger = createMemoryLogger(logs);
+
+      const intent = makeIntent();
+      let sendAttempts = 0;
+
+      const flakySender = async () => {
+        sendAttempts += 1;
+        if (sendAttempts === 1) {
+          const err = new Error('provider timeout');
+          err.name = 'TimeoutError';
+          throw err;
+        }
+        return { providerMessageId: `wamid.fake.${sendAttempts}` };
+      };
+
+      const first = await processOutboundBatch([intent], () => flakySender(), { dedupeStore: store, logger });
+      const second = await processOutboundBatch([intent], () => flakySender(), { dedupeStore: store, logger });
+
+      expect(sendAttempts).toBe(1);
+      expect(first.summary.failed).toBe(1);
+      expect(second.summary.deduped).toBe(1);
+
+      const statuses = logs.filter((entry) => entry.event === 'outbound_process_item').map((entry) => entry.status);
+      expect(statuses).toContain('failed');
+      expect(statuses).toContain('deduped');
     });
   });
 }

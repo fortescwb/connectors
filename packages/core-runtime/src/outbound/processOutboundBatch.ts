@@ -60,6 +60,12 @@ function extractUpstreamStatus(input: unknown): number | undefined {
   return undefined;
 }
 
+function sanitizeErrorMessage(message?: string): string | undefined {
+  if (!message) return undefined;
+  const truncated = message.length > 200 ? `${message.slice(0, 200)}...` : message;
+  return truncated.replace(/\d{4,}/g, '***');
+}
+
 /**
  * Process a batch of outbound message intents with distributed deduplication.
  *
@@ -136,7 +142,7 @@ export async function processOutboundBatch<TIntent extends OutboundIntent, TProv
         status,
         outcome: status === 'deduped' ? 'deduped' : 'sent',
         errorCode: dedupeErrorCode,
-        errorMessage: dedupeError.message,
+        errorMessage: sanitizeErrorMessage(dedupeError.message),
         latencyMs,
         toMasked: maskPhoneNumber(intent.to)
       });
@@ -164,7 +170,7 @@ export async function processOutboundBatch<TIntent extends OutboundIntent, TProv
           tenantId: intent.tenantId,
           status: 'deduped',
           errorCode: dedupeErrorCode,
-          errorMessage: dedupeError.message,
+          errorMessage: sanitizeErrorMessage(dedupeError.message),
           latencyMs
         });
         continue;
@@ -254,7 +260,7 @@ export async function processOutboundBatch<TIntent extends OutboundIntent, TProv
         latencyMs,
         errorCode: dedupeErrorCode ?? 'send_failed',
         ...(upstreamStatus ? { upstreamStatus } : {}),
-        errorMessage: err.message,
+        errorMessage: sanitizeErrorMessage(err.message),
         toMasked: maskPhoneNumber(intent.to)
       });
       // Counter: no latencyMs
@@ -279,7 +285,7 @@ export async function processOutboundBatch<TIntent extends OutboundIntent, TProv
         tenantId: intent.tenantId,
         status: 'failed',
         errorCode: dedupeErrorCode ?? 'send_failed',
-        errorMessage: err.message,
+        errorMessage: sanitizeErrorMessage(err.message),
         latencyMs,
         ...(upstreamStatus ? { upstreamStatus } : {})
       });
