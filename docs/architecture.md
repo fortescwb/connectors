@@ -90,6 +90,9 @@ Comandos são ações que o sistema envia para conectores executarem:
 - `@connectors/core-meta-graph` centraliza client HTTP, versionamento, headers/auth, retry/backoff, classificação de erros (429/`Retry-After`, 5xx, `is_transient`) e observabilidade PII-safe.
 - WhatsApp/Instagram/Messenger **não compartilham adapters**: cada canal mantém schemas/parsers próprios, mas todas as chamadas Graph passam pela base para absorver mudanças da Meta em um lugar só.
 - Logs do client incluem somente metadados (`endpoint`, `status`, `latencyMs`, `fbtraceId`); payloads não são logados.
+- Idempotência outbound Meta:
+  - WhatsApp: dedupe antes de qualquer HTTP via runtime (`core-runtime/processOutboundBatch`) com chave `whatsapp:tenant:{tenantId}:intent:{intentId}`. O mesmo `intentId` é usado como `client_msg_id` no Graph para alinhar com a idempotência do provedor.
+  - Instagram comment_reply: chave de dedupe ancorada em `tenantId + pageId + externalCommentId`; `idempotencyKey` continua obrigatória e é enviada como header `Idempotency-Key` em todas as tentativas, mas reprocessamentos do mesmo comment são bloqueados mesmo que o idempotencyKey mude.
 
 ---
 
