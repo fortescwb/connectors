@@ -390,19 +390,44 @@ importers:
         specifier: 1.6.1
         version: 1.6.1(@types/node@20.19.30)
 
+  packages/core-meta-graph:
+    dependencies:
+      '@connectors/core-logging':
+        specifier: workspace:^
+        version: link:../core-logging
+      '@connectors/core-rate-limit':
+        specifier: workspace:^
+        version: link:../core-rate-limit
+    devDependencies:
+      '@types/node':
+        specifier: ^20.10.6
+        version: 20.19.30
+      prettier:
+        specifier: ^3.1.1
+        version: 3.8.0
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
+      vitest:
+        specifier: ^1.1.3
+        version: 1.6.1(@types/node@20.19.30)
+
   packages/core-meta-instagram:
     dependencies:
       '@connectors/core-comments':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../core-comments
       '@connectors/core-logging':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../core-logging
+      '@connectors/core-meta-graph':
+        specifier: workspace:^
+        version: link:../core-meta-graph
       '@connectors/core-runtime':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../core-runtime
       '@connectors/core-validation':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../core-validation
       zod:
         specifier: ^3.22.4
@@ -421,16 +446,38 @@ importers:
         specifier: 1.6.1
         version: 1.6.1(@types/node@20.19.30)
 
+  packages/core-meta-messenger:
+    dependencies:
+      '@connectors/core-meta-graph':
+        specifier: workspace:^
+        version: link:../core-meta-graph
+    devDependencies:
+      '@types/node':
+        specifier: ^20.10.6
+        version: 20.19.30
+      prettier:
+        specifier: ^3.1.1
+        version: 3.8.0
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
+      vitest:
+        specifier: ^1.1.3
+        version: 1.6.1(@types/node@20.19.30)
+
   packages/core-meta-whatsapp:
     dependencies:
       '@connectors/core-messaging':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../core-messaging
+      '@connectors/core-meta-graph':
+        specifier: workspace:^
+        version: link:../core-meta-graph
       '@connectors/core-runtime':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../core-runtime
       '@connectors/core-validation':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../core-validation
       zod:
         specifier: ^3.22.4

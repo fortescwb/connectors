@@ -1,16 +1,11 @@
 {
-  "name": "@connectors/core-meta-whatsapp",
-  "version": "0.2.0",
+  "name": "@connectors/core-meta-messenger",
+  "version": "0.1.0",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "exports": {
-    ".": "./src/index.ts",
-    "./fixtures/*": "./fixtures/*"
-  },
   "files": [
-    "dist",
-    "fixtures"
+    "dist"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -19,11 +14,7 @@
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\""
   },
   "dependencies": {
-    "@connectors/core-messaging": "workspace:^",
-    "@connectors/core-meta-graph": "workspace:^",
-    "@connectors/core-runtime": "workspace:^",
-    "@connectors/core-validation": "workspace:^",
-    "zod": "^3.22.4"
+    "@connectors/core-meta-graph": "workspace:^"
   },
   "devDependencies": {
     "@types/node": "^20.10.6",

@@ -12,6 +12,11 @@ This package encapsulates all Meta-specific WhatsApp payload handling:
 
 **Design principle:** No WhatsApp/Meta-specific code should exist in `core-runtime` or apps. All Meta logic is contained here.
 
+### Shared Meta Graph base
+- Outbound `sendMessage` uses `@connectors/core-meta-graph` (auth headers, versioning, retry/backoff, rate-limit/429 handling, error classes).
+- Observability is centralized in the Graph client: structured logs only with metadata (`endpoint`, `status`, `latencyMs`, `fbtraceId`), never payloads/PII.
+- Channel-specific parsing/schema stays here; only the HTTP/Graph layer is shared across Meta connectors.
+
 ## Installation
 
 ```bash

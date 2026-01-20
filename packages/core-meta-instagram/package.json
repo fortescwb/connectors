@@ -1,6 +1,6 @@
 {
   "name": "@connectors/core-meta-instagram",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -15,10 +15,11 @@
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\" \"fixtures/**/*.json\""
   },
   "dependencies": {
-    "@connectors/core-runtime": "workspace:*",
-    "@connectors/core-validation": "workspace:*",
-    "@connectors/core-logging": "workspace:*",
-    "@connectors/core-comments": "workspace:*",
+    "@connectors/core-runtime": "workspace:^",
+    "@connectors/core-validation": "workspace:^",
+    "@connectors/core-logging": "workspace:^",
+    "@connectors/core-comments": "workspace:^",
+    "@connectors/core-meta-graph": "workspace:^",
     "zod": "^3.22.4"
   },
   "devDependencies": {

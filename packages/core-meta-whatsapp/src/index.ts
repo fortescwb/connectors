@@ -241,7 +241,6 @@ export type {
 } from './types.js';
 export {
   sendMessage,
-  type WhatsAppHttpClient,
   type WhatsAppSendMessageConfig,
   type WhatsAppSendMessageResponse
 } from './sendMessage.js';

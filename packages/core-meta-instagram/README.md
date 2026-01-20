@@ -28,6 +28,7 @@ const events = parseInstagramRuntimeRequest(runtimeRequest);
 ### 🚧 Instagram Comment Reply (Library Only)
 
 - **Client**: `sendCommentReplyBatch()` - Send comment replies via Graph API v19.0
+- **Graph base**: Reuses `@connectors/core-meta-graph` for headers/auth, retry/backoff (429/5xx/is_transient), and error normalization (`MetaGraphError`)
 - **Retry**: Configurable retry with exponential backoff (default: 3 attempts, 200ms base)
 - **Dedupe**: Caller-provided dedupe store and mandatory `idempotencyKey`; dedupe check happens before any HTTP call
 - **Error Classification**: `client_error`, `retry_exhausted`, `timeout`, `network_error`

@@ -18,7 +18,7 @@ function createCommand(overrides: Partial<Parameters<typeof sendCommentReplyBatc
   };
 }
 
-function createHttpClient({ status = 200, body = { id: 'reply_1' } } = {}) {
+function createTransport({ status = 200, body = { id: 'reply_1' } } = {}) {
   const fn = vi.fn(async () =>
     new Response(JSON.stringify(body), {
       status,
@@ -30,7 +30,7 @@ function createHttpClient({ status = 200, body = { id: 'reply_1' } } = {}) {
 
 describe('sendCommentReplyBatch', () => {
   it('throws when idempotencyKey is missing to prevent unstable dedupe keys', async () => {
-    const httpClient = createHttpClient();
+    const transport = createTransport();
 
     await expect(
       sendCommentReplyBatch(
@@ -38,30 +38,30 @@ describe('sendCommentReplyBatch', () => {
           // @ts-expect-error intentional: validating runtime guard when idempotencyKey is omitted
           createCommand({ idempotencyKey: undefined })
         ],
-        { accessToken: 'token', httpClient, dedupeStore: sharedDedupeStore, apiBaseUrl: 'https://graph.facebook.com/v19.0' }
+        { accessToken: 'token', transport, dedupeStore: sharedDedupeStore, apiBaseUrl: 'https://graph.facebook.com' }
       )
     ).rejects.toThrow(/idempotencyKey/);
   });
 
   it('sends a reply with dedupe and returns reply id', async () => {
-    const httpClient = createHttpClient();
+    const transport = createTransport();
     const results = await sendCommentReplyBatch(
       [createCommand({ externalCommentId: '1789_comment_1', externalPostId: '1789_post_1', idempotencyKey: 'reply-1' })],
       {
         accessToken: 'token',
-        httpClient,
+        transport,
         dedupeStore: sharedDedupeStore,
-        apiBaseUrl: 'https://graph.facebook.com/v19.0'
+        apiBaseUrl: 'https://graph.facebook.com'
       }
     );
 
     expect(results[0].success).toBe(true);
     expect(results[0].externalReplyId).toBe('reply_1');
-    expect(httpClient).toHaveBeenCalledTimes(1);
+    expect(transport).toHaveBeenCalledTimes(1);
   });
 
   it('dedupes repeated command with same idempotencyKey and commentId across calls', async () => {
-    const httpClient = createHttpClient();
+    const transport = createTransport();
     const command = createCommand({
       externalCommentId: '1789_comment_dup',
       externalPostId: '1789_post',
@@ -71,26 +71,26 @@ describe('sendCommentReplyBatch', () => {
 
     const first = await sendCommentReplyBatch([command], {
       accessToken: 'token',
-      httpClient,
+      transport,
       dedupeStore: sharedDedupeStore,
-      apiBaseUrl: 'https://graph.facebook.com/v19.0'
+      apiBaseUrl: 'https://graph.facebook.com'
     });
     const second = await sendCommentReplyBatch([command], {
       accessToken: 'token',
-      httpClient,
+      transport,
       dedupeStore: sharedDedupeStore,
-      apiBaseUrl: 'https://graph.facebook.com/v19.0'
+      apiBaseUrl: 'https://graph.facebook.com'
     });
 
     expect(first[0].success).toBe(true);
     expect(first[0].errorCode).toBeUndefined();
     expect(second[0].success).toBe(true);
     expect(second[0].errorCode).toBe('deduped');
-    expect(httpClient).toHaveBeenCalledTimes(1);
+    expect(transport).toHaveBeenCalledTimes(1);
   });
 
   it('does not dedupe when idempotencyKey differs for the same comment', async () => {
-    const httpClient = createHttpClient();
+    const transport = createTransport();
     const commandBase = {
       externalCommentId: '1789_comment_same',
       externalPostId: '1789_post',
@@ -99,39 +99,40 @@ describe('sendCommentReplyBatch', () => {
 
     await sendCommentReplyBatch(
       [createCommand({ ...commandBase, idempotencyKey: 'reply-variant-1' })],
-      { accessToken: 'token', httpClient, dedupeStore: sharedDedupeStore, apiBaseUrl: 'https://graph.facebook.com/v19.0' }
+      { accessToken: 'token', transport, dedupeStore: sharedDedupeStore, apiBaseUrl: 'https://graph.facebook.com' }
     );
     await sendCommentReplyBatch(
       [createCommand({ ...commandBase, idempotencyKey: 'reply-variant-2' })],
-      { accessToken: 'token', httpClient, dedupeStore: sharedDedupeStore, apiBaseUrl: 'https://graph.facebook.com/v19.0' }
+      { accessToken: 'token', transport, dedupeStore: sharedDedupeStore, apiBaseUrl: 'https://graph.facebook.com' }
     );
 
-    expect(httpClient).toHaveBeenCalledTimes(2);
+    expect(transport).toHaveBeenCalledTimes(2);
   });
 
   it('does not dedupe when commentId differs even with same idempotencyKey', async () => {
-    const httpClient = createHttpClient();
+    const transport = createTransport();
 
     await sendCommentReplyBatch(
       [createCommand({ externalCommentId: 'comment-a', idempotencyKey: 'shared-idem', content: { type: 'text', text: 'First' } })],
-      { accessToken: 'token', httpClient, dedupeStore: sharedDedupeStore, apiBaseUrl: 'https://graph.facebook.com/v19.0' }
+      { accessToken: 'token', transport, dedupeStore: sharedDedupeStore, apiBaseUrl: 'https://graph.facebook.com' }
     );
     await sendCommentReplyBatch(
       [createCommand({ externalCommentId: 'comment-b', idempotencyKey: 'shared-idem', content: { type: 'text', text: 'Second' } })],
-      { accessToken: 'token', httpClient, dedupeStore: sharedDedupeStore, apiBaseUrl: 'https://graph.facebook.com/v19.0' }
+      { accessToken: 'token', transport, dedupeStore: sharedDedupeStore, apiBaseUrl: 'https://graph.facebook.com' }
     );
 
-    expect(httpClient).toHaveBeenCalledTimes(2);
+    expect(transport).toHaveBeenCalledTimes(2);
   });
 
   it('retries on 500 and succeeds on second attempt', async () => {
+    vi.useFakeTimers();
     const responses = [500, 200];
-    const httpClient = vi.fn(async () => {
+    const transport = vi.fn(async () => {
       const status = responses.shift() ?? 500;
       return new Response(JSON.stringify({ id: 'reply_after_retry' }), { status, headers: { 'Content-Type': 'application/json' } });
     });
 
-    const results = await sendCommentReplyBatch(
+    const promise = sendCommentReplyBatch(
       [
         createCommand({
           externalCommentId: '1789_comment_retry',
@@ -142,23 +143,28 @@ describe('sendCommentReplyBatch', () => {
       ],
       {
         accessToken: 'token',
-        httpClient,
+        transport,
         dedupeStore: sharedDedupeStore,
-        apiBaseUrl: 'https://graph.facebook.com/v19.0'
+        apiBaseUrl: 'https://graph.facebook.com',
+        retry: { attempts: 3, backoffMs: 5 }
       }
     );
 
+    await vi.runAllTimersAsync();
+    const results = await promise;
     expect(results[0].success).toBe(true);
     expect(results[0].externalReplyId).toBe('reply_after_retry');
-    expect(httpClient).toHaveBeenCalledTimes(2);
+    expect(transport).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
   });
 
   it('fails with timeout and does not duplicate sends after retries', async () => {
-    const httpClient = vi.fn(async () => {
+    vi.useFakeTimers();
+    const transport = vi.fn(async () => {
       throw new Error('timeout');
     });
 
-    const results = await sendCommentReplyBatch(
+    const promise = sendCommentReplyBatch(
       [
         createCommand({
           externalCommentId: '1789_comment_timeout',
@@ -169,20 +175,23 @@ describe('sendCommentReplyBatch', () => {
       ],
       {
         accessToken: 'token',
-        httpClient,
+        transport,
         dedupeStore: sharedDedupeStore,
         retry: { attempts: 2, backoffMs: 10 },
-        apiBaseUrl: 'https://graph.facebook.com/v19.0'
+        apiBaseUrl: 'https://graph.facebook.com'
       }
     );
 
+    await vi.runAllTimersAsync();
+    const results = await promise;
     expect(results[0].success).toBe(false);
     expect(results[0].errorCode).toBe('timeout');
-    expect(httpClient).toHaveBeenCalledTimes(2);
+    expect(transport).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
   });
 
   it('throws when dedupeStore is missing to prevent unsafe outbound use', async () => {
-    const httpClient = createHttpClient();
+    const transport = createTransport();
 
     // @ts-expect-error intentional: validating runtime guard when dedupeStore is omitted
     await expect(
@@ -199,8 +208,8 @@ describe('sendCommentReplyBatch', () => {
         ],
         {
           accessToken: 'token',
-          httpClient,
-          apiBaseUrl: 'https://graph.facebook.com/v19.0'
+          transport,
+          apiBaseUrl: 'https://graph.facebook.com'
         }
       )
     ).rejects.toThrow(/dedupeStore is required/);

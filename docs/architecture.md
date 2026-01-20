@@ -83,6 +83,13 @@ Comandos são ações que o sistema envia para conectores executarem:
 |--------|-----|--------------|
 | `core-meta-whatsapp` | Parsing de webhooks do WhatsApp Business, fixtures reais e testes de batch/dedupe | ativo e usado em `apps/whatsapp` |
 | `core-meta-instagram` | Parsing de webhooks de Instagram DM; cliente de reply de comentário (library only, não wired) | inbound DM ativo; `comment_reply` permanece *planned* |
+| `core-meta-graph` | Base compartilhada para chamadas Graph (auth, headers, retry/backoff, rate-limit, erros) | compartilhado entre WhatsApp/Instagram/Messenger |
+| `core-meta-messenger` | Scaffold inicial com wrapper de Graph client e TODO de parsing | planned/scaffold |
+
+### Base Meta Graph (compartilhada)
+- `@connectors/core-meta-graph` centraliza client HTTP, versionamento, headers/auth, retry/backoff, classificação de erros (429/`Retry-After`, 5xx, `is_transient`) e observabilidade PII-safe.
+- WhatsApp/Instagram/Messenger **não compartilham adapters**: cada canal mantém schemas/parsers próprios, mas todas as chamadas Graph passam pela base para absorver mudanças da Meta em um lugar só.
+- Logs do client incluem somente metadados (`endpoint`, `status`, `latencyMs`, `fbtraceId`); payloads não são logados.
 
 ---
 
@@ -658,5 +665,6 @@ apps/{connector}/
 |----------|-----|----------|--------|---------------------|
 | WhatsApp | `whatsapp` | meta | ✅ Active | inbound_messages, message_status_updates, webhook_verification |
 | Instagram | `instagram` | meta | ✅ Active | inbound_messages, webhook_verification |
+| Messenger | `messenger` | meta | 📋 Planned/Scaffold | (placeholder parsing; usar base Graph compartilhada) |
 | Calendar | `calendar` | google | 📋 Planned | (scaffold apenas) |
 | Automation | `automation` | zapier | 📋 Planned | (scaffold apenas) |

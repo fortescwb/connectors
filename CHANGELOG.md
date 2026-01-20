@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 > Releases are **independent per package**. Package versions below are authoritative; there is no single monorepo version.
 
+## 2026-01-19 — Package releases (Meta Graph base)
+
+### @connectors/core-meta-graph @0.1.0
+- Shared Meta Graph client with auth/versioning defaults, retry/backoff (429 + `Retry-After`, 5xx, `is_transient`), and error normalization via `MetaGraphError` classes.
+- Helpers for `buildGraphUrl`, `classifyError`, `parseRetryAfter`, and PII-safe masking/logging.
+
+### @connectors/core-meta-whatsapp @0.2.0
+- `sendMessage` now uses the shared Meta Graph client (headers/auth, retry/backoff, rate-limit handling) instead of a bespoke fetch wrapper.
+- Tests cover rate-limit/timeout scenarios; internal deps normalized to `workspace:^`.
+
+### @connectors/core-meta-instagram @0.3.0
+- Comment reply client refactored to reuse the shared Meta Graph base for HTTP/retry/error normalization.
+- Maintains dedupe/idempotency guarantees; retry/backoff honors Meta rate-limit signals.
+
+### @connectors/core-meta-messenger @0.1.0
+- Scaffold package with Messenger Graph client wrapper on top of the shared base.
+- Webhook parsing remains TODO with explicit placeholder (no capabilities marked active).
+
 ## 2026-01-19 — Package releases
 
 ### @connectors/core-meta-instagram @0.2.0
