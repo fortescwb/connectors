@@ -14,7 +14,8 @@ const resolveAlias = {
   '@connectors/core-runtime': path.join(workspaceRoot, 'packages/core-runtime/src/index.ts'),
   '@connectors/core-connectors': path.join(workspaceRoot, 'packages/core-connectors/src/index.ts'),
   '@connectors/adapter-express': path.join(workspaceRoot, 'packages/adapter-express/src/index.ts'),
-  '@connectors/core-messaging': path.join(workspaceRoot, 'packages/core-messaging/src/index.ts')
+  '@connectors/core-messaging': path.join(workspaceRoot, 'packages/core-messaging/src/index.ts'),
+  '@connectors/core-meta-whatsapp': path.join(workspaceRoot, 'packages/core-meta-whatsapp/src/index.ts')
 };
 
 export default defineConfig({

@@ -21,7 +21,7 @@ Ele existe para garantir que:
 
 > **Princípio central:**  
 > **Não queremos apenas “uma funcionalidade” de cada API.  
-> Queremos TODAS as funcionalidades oficialmente disponíveis, corretamente suportadas.**
+> Queremos TODAS AS PRINCIPAIS funcionalidades oficialmente disponíveis, corretamente suportadas. Sendo o mínimo 4 e o máximo 10 funcionalidades por canal**
 
 ---
 

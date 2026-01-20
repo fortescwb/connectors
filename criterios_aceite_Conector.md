@@ -1,6 +1,6 @@
 # 1. Cobertura Funcional Completa por Canal (OBRIGATÓRIO)
 
-Para **cada canal**, **TODAS as funcionalidades disponibilizadas oficialmente pela plataforma** devem estar implementadas, **sem exceções**.
+Para **cada canal**, **As funcionalidades disponibilizadas oficialmente por cada plataforma** devem estar implementadas, **não-principal = out of scope / future backlog**.
 
 Isso inclui, conforme aplicável ao canal:
 
@@ -17,7 +17,7 @@ Isso inclui, conforme aplicável ao canal:
 * Texto
 * Áudio
 * Imagem
-* Vídeo
+* Contato
 * Documento
 * Localização
 * Stickers / reactions / attachments (quando aplicável)
@@ -30,7 +30,7 @@ Isso inclui, conforme aplicável ao canal:
 * Identificadores do tenant / página / conta
 
 > ❌ **Não é aceitável** declarar um canal como “concluído” com apenas inbound + outbound parcial.
-> ✔️ Um canal só está pronto quando **tudo que a API permite, o conector suporta**.
+> ✔️ Um canal só está pronto quando **as principais funcionalidades que cada API permite, o conector suporta**.
 
 ---
 
