@@ -1,0 +1,35 @@
+{
+  "$schema": "../../src/schemas/outbound-intent.json",
+  "$description": "Valid document message outbound intent fixture (using media URL)",
+  "intent": {
+    "intentId": "01H5EXAMPLE-DOC-INTENT-12345678",
+    "tenantId": "tenant_test_001",
+    "provider": "whatsapp",
+    "to": "+15551234567",
+    "payload": {
+      "type": "document",
+      "mediaUrl": "https://example.com/files/invoice.pdf",
+      "filename": "invoice_2024_001.pdf",
+      "caption": "Your invoice for January 2024"
+    },
+    "dedupeKey": "whatsapp:tenant:tenant_test_001:intent:01H5EXAMPLE-DOC-INTENT-12345678",
+    "correlationId": "corr_doc_001",
+    "createdAt": "2024-01-15T10:32:00.000Z"
+  },
+  "expectedApiPayload": {
+    "messaging_product": "whatsapp",
+    "to": "+15551234567",
+    "type": "document",
+    "document": {
+      "link": "https://example.com/files/invoice.pdf",
+      "filename": "invoice_2024_001.pdf",
+      "caption": "Your invoice for January 2024"
+    },
+    "client_msg_id": "01H5EXAMPLE-DOC-INTENT-12345678"
+  },
+  "expectedResponse": {
+    "messaging_product": "whatsapp",
+    "contacts": [{ "input": "+15551234567", "wa_id": "15551234567" }],
+    "messages": [{ "id": "wamid.HBgLMTU1NTEyMzQ1NjcVAgARGBI5QUZGQUQ1MTJCMTQ1NjdGNUMA" }]
+  }
+}

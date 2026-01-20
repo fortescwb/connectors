@@ -3,7 +3,14 @@ import { describe, expect, it, vi } from 'vitest';
 import { MetaGraphError, MetaGraphTimeoutError } from '@connectors/core-meta-graph';
 import type { OutboundMessageIntent } from '@connectors/core-messaging';
 
-import { sendMessage } from '../src/sendMessage.js';
+import { sendMessage, sendWhatsAppOutbound, markAsRead } from '../src/sendMessage.js';
+
+import audioFixture from '../fixtures/outbound/example_audio_message.json';
+import documentFixture from '../fixtures/outbound/example_document_message.json';
+import contactsFixture from '../fixtures/outbound/example_contacts_message.json';
+import reactionFixture from '../fixtures/outbound/example_reaction_message.json';
+import templateFixture from '../fixtures/outbound/example_template_message.json';
+import markReadFixture from '../fixtures/outbound/example_mark_read.json';
 
 const makeIntent = (overrides: Partial<OutboundMessageIntent> = {}): OutboundMessageIntent => ({
   intentId: '550e8400-e29b-41d4-a716-446655440000',
@@ -15,6 +22,10 @@ const makeIntent = (overrides: Partial<OutboundMessageIntent> = {}): OutboundMes
   correlationId: 'corr-123',
   createdAt: new Date().toISOString(),
   ...overrides
+});
+
+const makeIntentFromFixture = (fixture: { intent: OutboundMessageIntent }): OutboundMessageIntent => ({
+  ...fixture.intent
 });
 
 describe('sendMessage', () => {
@@ -186,5 +197,220 @@ describe('sendMessage', () => {
     expect(result.providerMessageId).toBeUndefined();
     expect(result.status).toBe(200);
     expect(result.raw).toBeUndefined();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Testes por tipo de payload (usando fixtures reais)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('sendMessage - audio payload', () => {
+  it('builds correct API payload for audio message with mediaId', async () => {
+    const calls: Array<{ body?: string }> = [];
+    const transport = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ body: init?.body as string });
+      return new Response(JSON.stringify(audioFixture.expectedResponse), { status: 200 });
+    });
+
+    const intent = makeIntentFromFixture(audioFixture as { intent: OutboundMessageIntent });
+
+    const result = await sendMessage(intent, {
+      accessToken: 'token-test',
+      phoneNumberId: '12345',
+      transport,
+      retry: { maxRetries: 0 }
+    });
+
+    expect(calls).toHaveLength(1);
+    const body = JSON.parse(calls[0]?.body ?? '{}');
+    expect(body).toMatchObject({
+      messaging_product: 'whatsapp',
+      type: 'audio',
+      audio: { id: (intent.payload as { mediaId?: string }).mediaId }
+    });
+    expect(result.providerMessageId).toBeDefined();
+  });
+});
+
+describe('sendMessage - document payload', () => {
+  it('builds correct API payload for document message with mediaUrl', async () => {
+    const calls: Array<{ body?: string }> = [];
+    const transport = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ body: init?.body as string });
+      return new Response(JSON.stringify(documentFixture.expectedResponse), { status: 200 });
+    });
+
+    const intent = makeIntentFromFixture(documentFixture as { intent: OutboundMessageIntent });
+
+    await sendMessage(intent, {
+      accessToken: 'token-test',
+      phoneNumberId: '12345',
+      transport,
+      retry: { maxRetries: 0 }
+    });
+
+    expect(calls).toHaveLength(1);
+    const body = JSON.parse(calls[0]?.body ?? '{}');
+    expect(body).toMatchObject({
+      messaging_product: 'whatsapp',
+      type: 'document',
+      document: {
+        link: (intent.payload as { mediaUrl?: string }).mediaUrl,
+        filename: (intent.payload as { filename?: string }).filename,
+        caption: (intent.payload as { caption?: string }).caption
+      }
+    });
+  });
+});
+
+describe('sendMessage - contacts payload', () => {
+  it('builds correct API payload for contacts message', async () => {
+    const calls: Array<{ body?: string }> = [];
+    const transport = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ body: init?.body as string });
+      return new Response(JSON.stringify(contactsFixture.expectedResponse), { status: 200 });
+    });
+
+    const intent = makeIntentFromFixture(contactsFixture as { intent: OutboundMessageIntent });
+
+    await sendMessage(intent, {
+      accessToken: 'token-test',
+      phoneNumberId: '12345',
+      transport,
+      retry: { maxRetries: 0 }
+    });
+
+    expect(calls).toHaveLength(1);
+    const body = JSON.parse(calls[0]?.body ?? '{}');
+    expect(body.type).toBe('contacts');
+    expect(body.contacts).toHaveLength(1);
+    expect(body.contacts[0].name).toMatchObject({ formatted_name: 'John Doe' });
+  });
+});
+
+describe('sendMessage - reaction payload', () => {
+  it('builds correct API payload for reaction message', async () => {
+    const calls: Array<{ body?: string }> = [];
+    const transport = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ body: init?.body as string });
+      return new Response(JSON.stringify(reactionFixture.expectedResponse), { status: 200 });
+    });
+
+    const intent = makeIntentFromFixture(reactionFixture as { intent: OutboundMessageIntent });
+
+    await sendMessage(intent, {
+      accessToken: 'token-test',
+      phoneNumberId: '12345',
+      transport,
+      retry: { maxRetries: 0 }
+    });
+
+    expect(calls).toHaveLength(1);
+    const body = JSON.parse(calls[0]?.body ?? '{}');
+    expect(body).toMatchObject({
+      messaging_product: 'whatsapp',
+      type: 'reaction',
+      reaction: {
+        message_id: (intent.payload as { messageId: string }).messageId,
+        emoji: (intent.payload as { emoji: string }).emoji
+      }
+    });
+  });
+});
+
+describe('sendMessage - template payload', () => {
+  it('builds correct API payload for template message', async () => {
+    const calls: Array<{ body?: string }> = [];
+    const transport = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ body: init?.body as string });
+      return new Response(JSON.stringify(templateFixture.expectedResponse), { status: 200 });
+    });
+
+    const intent = makeIntentFromFixture(templateFixture as { intent: OutboundMessageIntent });
+
+    await sendMessage(intent, {
+      accessToken: 'token-test',
+      phoneNumberId: '12345',
+      transport,
+      retry: { maxRetries: 0 }
+    });
+
+    expect(calls).toHaveLength(1);
+    const body = JSON.parse(calls[0]?.body ?? '{}');
+    expect(body.type).toBe('template');
+    expect(body.template).toMatchObject({
+      name: (intent.payload as { templateName: string }).templateName,
+      language: { code: (intent.payload as { languageCode: string }).languageCode }
+    });
+    expect(body.template.components).toHaveLength(1);
+  });
+});
+
+describe('markAsRead', () => {
+  it('sends correct read receipt payload', async () => {
+    const calls: Array<{ url: string; body?: string }> = [];
+    const transport = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ url: String(url), body: init?.body as string });
+      return new Response(JSON.stringify(markReadFixture.expectedResponse), { status: 200 });
+    });
+
+    const result = await markAsRead(markReadFixture.messageId, {
+      accessToken: 'token-test',
+      phoneNumberId: '12345',
+      transport,
+      retry: { maxRetries: 0 }
+    });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.url).toContain('/messages');
+    const body = JSON.parse(calls[0]?.body ?? '{}');
+    expect(body).toMatchObject({
+      messaging_product: 'whatsapp',
+      status: 'read',
+      message_id: markReadFixture.messageId
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('returns success false on failed mark read', async () => {
+    const transport = vi.fn(async () => {
+      return new Response(JSON.stringify({ success: false }), { status: 200 });
+    });
+
+    const result = await markAsRead('some-message-id', {
+      accessToken: 'token',
+      phoneNumberId: '123',
+      transport,
+      retry: { maxRetries: 0 }
+    });
+
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('sendWhatsAppOutbound', () => {
+  it('routes mark_read payloads through markAsRead without duplicating logic', async () => {
+    const calls: Array<{ url: string; body?: string }> = [];
+    const transport = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ url: String(url), body: init?.body as string });
+      return new Response(JSON.stringify({ success: true }), { status: 200 });
+    });
+
+    const intent: OutboundMessageIntent = {
+      ...makeIntent(),
+      payload: { type: 'mark_read', messageId: 'wamid.TEST.READ' }
+    };
+
+    const result = await sendWhatsAppOutbound(intent, {
+      accessToken: 'token-test',
+      phoneNumberId: '12345',
+      transport,
+      retry: { maxRetries: 0 }
+    });
+
+    expect(calls).toHaveLength(1);
+    const body = JSON.parse(calls[0]?.body ?? '{}');
+    expect(body).toMatchObject({ status: 'read', message_id: 'wamid.TEST.READ' });
+    expect((result as { success?: boolean }).success).toBe(true);
   });
 });

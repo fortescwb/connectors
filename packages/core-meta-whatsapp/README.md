@@ -1,6 +1,23 @@
 # @connectors/core-meta-whatsapp
 
-Parser and schemas for Meta WhatsApp Business API webhook payloads.
+Parser, schemas, and outbound message sender for Meta WhatsApp Business API.
+
+## Principal Functionality Status
+
+| Capability | Status | Notes |
+|------------|--------|-------|
+| **Inbound messages** | ✅ Implemented | text, image, document, webhook verification |
+| **Status updates** | ✅ Implemented | sent, delivered, read, failed |
+| **Outbound: text** | ✅ Implemented | with preview_url support |
+| **Outbound: audio** | ✅ Implemented | via media ID or URL |
+| **Outbound: document** | ✅ Implemented | with filename, caption support |
+| **Outbound: contacts** | ✅ Implemented | vCard-style contact sharing |
+| **Outbound: reaction** | ✅ Implemented | emoji reactions to messages |
+| **Outbound: template** | ✅ Implemented | template messages with components |
+| **Mark as read** | ✅ Implemented | read receipts |
+| Template management | 📋 Backlog | CRUD operations for templates |
+| Media upload | 📋 Backlog | Upload media to WhatsApp servers |
+| Interactive messages | 📋 Backlog | Buttons, lists, product messages |
 
 ## Purpose
 
@@ -9,6 +26,7 @@ This package encapsulates all Meta-specific WhatsApp payload handling:
 - Payload normalization (snake_case → camelCase)
 - Dedupe key generation
 - PII-safe event extraction
+- Outbound message builders for all principal message types
 
 **Design principle:** No WhatsApp/Meta-specific code should exist in `core-runtime` or apps. All Meta logic is contained here.
 
@@ -99,9 +117,60 @@ Dedupe keys are deterministic and include enough context to prevent collisions:
 
 **Why status includes the status name:** A single message can have multiple status updates (sent → delivered → read). Including the status name ensures each update is processed exactly once.
 
+## Outbound Messages
+
+All principal outbound message types are supported via `sendMessage()`:
+
+```typescript
+import { sendWhatsAppOutbound } from '@connectors/core-meta-whatsapp';
+import { buildWhatsAppOutboundDedupeKey, type OutboundMessageIntent } from '@connectors/core-messaging';
+
+// Text message
+const textIntent: OutboundMessageIntent = {
+  intentId: '550e8400-e29b-41d4-a716-446655440000',
+  tenantId: 'tenant-1',
+  provider: 'whatsapp',
+  to: '+15551234567',
+  payload: { type: 'text', text: 'Hello!', previewUrl: false },
+  dedupeKey: buildWhatsAppOutboundDedupeKey('tenant-1', '550e8400-e29b-41d4-a716-446655440000'),
+  correlationId: 'corr-123',
+  createdAt: new Date().toISOString()
+};
+
+const result = await sendWhatsAppOutbound(textIntent, {
+  accessToken: process.env.WHATSAPP_ACCESS_TOKEN,
+  phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID
+});
+
+// Mark message as read with the same dispatcher
+await sendWhatsAppOutbound(
+  {
+    ...textIntent,
+    payload: { type: 'mark_read', messageId: 'wamid.XXX' }
+  },
+  {
+    accessToken: process.env.WHATSAPP_ACCESS_TOKEN,
+    phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID
+  }
+);
+```
+
+### Supported Payload Types
+
+| Type | Fields | Notes |
+|------|--------|-------|
+| `text` | `text`, `previewUrl?` | Plain text with optional link preview |
+| `audio` | `mediaId` or `mediaUrl` | Audio file (ogg, mp3, etc.) |
+| `document` | `mediaId` or `mediaUrl`, `filename?`, `caption?` | PDF, DOC, etc. |
+| `contacts` | `contacts[]` with `name`, `phones?`, `emails?` | vCard-style sharing |
+| `reaction` | `messageId`, `emoji` | React to a message |
+| `template` | `templateName`, `languageCode`, `components?` | Pre-approved templates |
+
 ## Fixtures
 
 Real webhook payloads (with PII redacted) are stored in `fixtures/`:
+
+### Inbound Fixtures
 
 | File | Description | Capabilities |
 |------|-------------|--------------|
@@ -111,6 +180,20 @@ Real webhook payloads (with PII redacted) are stored in `fixtures/`:
 | `status_read.json` | Status update: read | `message_status_updates` |
 | `status_failed.json` | Status update: failed with error | `message_status_updates` |
 | `invalid_missing_metadata.json` | Invalid payload (validation error) | - |
+
+### Outbound Fixtures
+
+All outbound fixtures are **scaffold/examples** only. Capture real sandbox traffic before promoting readiness.
+
+| File | Origem | Data | Campos sanitizados / TODOs |
+|------|--------|------|----------------------------|
+| `outbound/example_text_message.json` | Exemplo scaffold (não capturado de tráfego real) – TODO capturar payload real de sandbox/test | N/A | `to`, `wa_id`, `intentId`, message body, fbtrace IDs sanitizados |
+| `outbound/example_audio_message.json` | Exemplo scaffold – TODO substituir por captura real | N/A | `mediaId/mediaUrl`, `to`, `intentId` sanitizados |
+| `outbound/example_document_message.json` | Exemplo scaffold – TODO substituir por captura real | N/A | Document link/ID, filename, `to`, `intentId` sanitizados |
+| `outbound/example_contacts_message.json` | Exemplo scaffold – TODO substituir por captura real | N/A | Contatos/telefones/emails, `intentId` sanitizados |
+| `outbound/example_reaction_message.json` | Exemplo scaffold – TODO substituir por captura real | N/A | `messageId`, `emoji`, `intentId` sanitizados |
+| `outbound/example_template_message.json` | Exemplo scaffold – TODO substituir por captura real | N/A | Template name/components, `intentId`, destinatário sanitizados |
+| `outbound/example_mark_read.json` | Exemplo scaffold – TODO substituir por captura real | N/A | `message_id`, `intentId`, `to` sanitizados |
 
 ### How to capture/update fixtures
 
@@ -195,6 +278,16 @@ pnpm test -- --coverage
 ```typescript
 // Main parser
 export { parseWhatsAppWebhook, parseWhatsAppRuntimeRequest } from '@connectors/core-meta-whatsapp';
+
+// Outbound
+export {
+  sendMessage,
+  markAsRead,
+  type WhatsAppSendMessageConfig,
+  type WhatsAppSendMessageResponse,
+  type WhatsAppMarkReadConfig,
+  type WhatsAppMarkReadResponse
+} from '@connectors/core-meta-whatsapp';
 
 // Types
 export type {

@@ -241,6 +241,11 @@ export type {
 } from './types.js';
 export {
   sendMessage,
+  sendWhatsAppOutbound,
+  markAsRead,
   type WhatsAppSendMessageConfig,
-  type WhatsAppSendMessageResponse
+  type WhatsAppSendMessageResponse,
+  type WhatsAppOutboundConfig,
+  type WhatsAppMarkReadConfig,
+  type WhatsAppMarkReadResponse
 } from './sendMessage.js';

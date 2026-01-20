@@ -2,8 +2,14 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { GenericContainer, Wait, type StartedTestContainer } from 'testcontainers';
 import { createClient, type RedisClientType } from 'redis';
 import { randomUUID } from 'node:crypto';
+import { createServer } from 'node:http';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import type { AddressInfo } from 'node:net';
+import { fileURLToPath } from 'node:url';
 
 import { buildWhatsAppOutboundDedupeKey, type OutboundMessageIntent } from '@connectors/core-messaging';
+import { sendWhatsAppOutbound } from '@connectors/core-meta-whatsapp';
 
 import { processOutboundBatch } from '../src/outbound/processOutboundBatch.js';
 import type { OutboundBatchResult } from '../src/outbound/types.js';
@@ -15,6 +21,47 @@ import { RedisDedupeStore, type RedisClient } from '../src/redis-dedupe-store.js
 // - Local: Skips if Docker/Podman unavailable (with warning)
 // - CI: FAILS if container cannot start (gate requirement)
 // ─────────────────────────────────────────────────────────────────────────────
+
+const __dirname = fileURLToPath(new URL('.', import.meta.url));
+const outboundFixturesDir = path.resolve(__dirname, '..', '..', 'core-meta-whatsapp', 'fixtures', 'outbound');
+
+function loadOutboundIntent(name: string): OutboundMessageIntent {
+  const filePath = path.join(outboundFixturesDir, `${name}.json`);
+  const parsed = JSON.parse(readFileSync(filePath, 'utf-8')) as { intent: OutboundMessageIntent };
+  return {
+    ...parsed.intent,
+    dedupeKey: buildWhatsAppOutboundDedupeKey(parsed.intent.tenantId, parsed.intent.intentId)
+  };
+}
+
+function startMockGraphServer() {
+  const calls: Array<{ path: string; body: string; headers: Record<string, unknown> }> = [];
+  const server = createServer((req, res) => {
+    const chunks: Buffer[] = [];
+    req.on('data', (chunk) => chunks.push(chunk));
+    req.on('end', () => {
+      const body = Buffer.concat(chunks).toString();
+      calls.push({ path: req.url ?? '', body, headers: req.headers as Record<string, unknown> });
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ messages: [{ id: `wamid.server.${calls.length}` }] }));
+    });
+  });
+
+  return new Promise<{ url: string; calls: typeof calls; close: () => Promise<void> }>((resolve) => {
+    server.listen(0, () => {
+      const { port } = server.address() as AddressInfo;
+      resolve({
+        url: `http://127.0.0.1:${port}`,
+        calls,
+        close: () =>
+          new Promise<void>((closeResolve) => {
+            server.close(() => closeResolve());
+          })
+      });
+    });
+  });
+}
 
 const IS_CI = process.env.CI === 'true';
 const REDIS_IMAGE = process.env.REDIS_TEST_IMAGE ?? 'redis:7-alpine';
@@ -131,12 +178,12 @@ if (!redisSetup.ok) {
     });
   }
 } else {
-  describe('outbound runtime exactly-once (redis)', () => {
-    afterAll(async () => {
-      await Promise.allSettled([redisSetup.clientA.quit(), redisSetup.clientB.quit()]);
-      await redisSetup.container.stop();
-    });
+  afterAll(async () => {
+    await Promise.allSettled([redisSetup.clientA.quit(), redisSetup.clientB.quit()]);
+    await redisSetup.container.stop();
+  });
 
+  describe('outbound runtime exactly-once (redis)', () => {
     it('dedupes across instances and logs per item', async () => {
       const keyPrefix = makeKeyPrefix();
       const storeA = new RedisDedupeStore({ client: createAdapter(redisSetup.clientA), keyPrefix, failMode: 'open' });
@@ -203,6 +250,73 @@ if (!redisSetup.ok) {
       const statuses = logs.filter((entry) => entry.event === 'outbound_process_item').map((entry) => entry.status);
       expect(statuses).toContain('failed');
       expect(statuses).toContain('deduped');
+    });
+  });
+
+  describe('whatsapp outbound via Graph (redis)', () => {
+    const phoneNumberId = '999999999';
+
+    it.each(['example_text_message', 'example_template_message', 'example_document_message'])(
+      'dedupes %s across concurrent runners with Redis',
+      async (fixtureName) => {
+        const server = await startMockGraphServer();
+        const keyPrefix = makeKeyPrefix();
+        const storeA = new RedisDedupeStore({ client: createAdapter(redisSetup.clientA), keyPrefix, failMode: 'open' });
+        const storeB = new RedisDedupeStore({ client: createAdapter(redisSetup.clientB), keyPrefix, failMode: 'open' });
+
+        const intent = loadOutboundIntent(fixtureName);
+        const send = (i: OutboundMessageIntent) =>
+          sendWhatsAppOutbound(i, {
+            accessToken: 'token-test',
+            phoneNumberId,
+            baseUrl: server.url,
+            retry: { maxRetries: 0 }
+          });
+
+        try {
+          const [resultA, resultB]: [OutboundBatchResult, OutboundBatchResult] = await Promise.all([
+            processOutboundBatch([intent], send, { dedupeStore: storeA }),
+            processOutboundBatch([intent], send, { dedupeStore: storeB })
+          ]);
+
+          expect(resultA.summary.sent + resultB.summary.sent).toBe(1);
+          expect(resultA.summary.deduped + resultB.summary.deduped).toBe(1);
+          expect(server.calls).toHaveLength(1);
+          expect(server.calls[0]?.path).toContain(`/${phoneNumberId}/messages`);
+        } finally {
+          await server.close();
+        }
+      }
+    );
+
+    it('marks deduped on reprocessing after transport timeout without duplicating HTTP call', async () => {
+      const keyPrefix = makeKeyPrefix();
+      const store = new RedisDedupeStore({ client: createAdapter(redisSetup.clientA), keyPrefix, failMode: 'open' });
+      const intent = loadOutboundIntent('example_audio_message');
+
+      let attempts = 0;
+      const timeoutTransport = async () => {
+        attempts += 1;
+        const err = new Error('timeout');
+        err.name = 'AbortError';
+        throw err;
+      };
+
+      const send = (i: OutboundMessageIntent) =>
+        sendWhatsAppOutbound(i, {
+          accessToken: 'token-test',
+          phoneNumberId,
+          baseUrl: 'http://127.0.0.1:0', // never reached because transport throws
+          transport: timeoutTransport,
+          retry: { maxRetries: 0 }
+        });
+
+      const first = await processOutboundBatch([intent], send, { dedupeStore: store });
+      const second = await processOutboundBatch([intent], send, { dedupeStore: store });
+
+      expect(attempts).toBe(1);
+      expect(first.summary.failed).toBe(1);
+      expect(second.summary.deduped).toBe(1);
     });
   });
 }

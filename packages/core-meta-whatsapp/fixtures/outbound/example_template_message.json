@@ -1,0 +1,49 @@
+{
+  "$schema": "../../src/schemas/outbound-intent.json",
+  "$description": "Valid template message outbound intent fixture (hello_world template)",
+  "intent": {
+    "intentId": "01H5EXAMPLE-TEMPL-INTENT-12345",
+    "tenantId": "tenant_test_001",
+    "provider": "whatsapp",
+    "to": "+15551234567",
+    "payload": {
+      "type": "template",
+      "templateName": "hello_world",
+      "languageCode": "en_US",
+      "components": [
+        {
+          "type": "body",
+          "parameters": [
+            { "type": "text", "text": "John" }
+          ]
+        }
+      ]
+    },
+    "dedupeKey": "whatsapp:tenant:tenant_test_001:intent:01H5EXAMPLE-TEMPL-INTENT-12345",
+    "correlationId": "corr_template_001",
+    "createdAt": "2024-01-15T10:35:00.000Z"
+  },
+  "expectedApiPayload": {
+    "messaging_product": "whatsapp",
+    "to": "+15551234567",
+    "type": "template",
+    "template": {
+      "name": "hello_world",
+      "language": { "code": "en_US" },
+      "components": [
+        {
+          "type": "body",
+          "parameters": [
+            { "type": "text", "text": "John" }
+          ]
+        }
+      ]
+    },
+    "client_msg_id": "01H5EXAMPLE-TEMPL-INTENT-12345"
+  },
+  "expectedResponse": {
+    "messaging_product": "whatsapp",
+    "contacts": [{ "input": "+15551234567", "wa_id": "15551234567" }],
+    "messages": [{ "id": "wamid.HBgLMTU1NTEyMzQ1NjcVAgARGBI5QUZGQUQ1MTJCMTQ1NjdGNUZA" }]
+  }
+}
