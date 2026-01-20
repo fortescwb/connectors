@@ -185,6 +185,9 @@ importers:
       '@connectors/core-logging':
         specifier: workspace:*
         version: link:../../packages/core-logging
+      '@connectors/core-messaging':
+        specifier: workspace:*
+        version: link:../../packages/core-messaging
       '@connectors/core-meta-whatsapp':
         specifier: workspace:*
         version: link:../../packages/core-meta-whatsapp

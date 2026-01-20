@@ -14,6 +14,7 @@
   "dependencies": {
     "@connectors/core-connectors": "workspace:*",
     "@connectors/core-logging": "workspace:*",
+    "@connectors/core-messaging": "workspace:*",
     "@connectors/core-meta-whatsapp": "workspace:*",
     "@connectors/core-runtime": "workspace:*",
     "@connectors/core-signature": "workspace:*",

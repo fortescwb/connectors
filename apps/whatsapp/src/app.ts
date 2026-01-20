@@ -8,10 +8,14 @@ import {
   type ParsedEvent,
   type RuntimeRequest,
   type SignatureVerifier,
-  type WebhookVerifyHandler
+  type WebhookVerifyHandler,
+  processOutboundBatch,
+  type DedupeStore,
+  type OutboundBatchResult
 } from '@connectors/core-runtime';
 import { capability, type ConnectorManifest } from '@connectors/core-connectors';
-import { parseWhatsAppRuntimeRequest } from '@connectors/core-meta-whatsapp';
+import { parseWhatsAppRuntimeRequest, sendWhatsAppOutbound, type WhatsAppOutboundConfig } from '@connectors/core-meta-whatsapp';
+import type { OutboundMessageIntent } from '@connectors/core-messaging';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MANIFEST
@@ -33,13 +37,17 @@ export const whatsappManifest: ConnectorManifest = {
       'active',
       'Receive message delivery status (requires shared dedupe store for production)'
     ),
-    capability('outbound_messages', 'planned', 'Send messages via Graph API (not implemented yet)'),
+    capability(
+      'outbound_messages',
+      'active',
+      'Send messages via Graph API (text, audio, document, contacts, reaction, template, mark_read)'
+    ),
     capability('webhook_verification', 'active', 'Meta webhook verification endpoint')
   ],
   webhookPath: '/webhook',
   healthPath: '/health',
   requiredEnvVars: ['WHATSAPP_VERIFY_TOKEN'],
-  optionalEnvVars: ['WHATSAPP_WEBHOOK_SECRET']
+  optionalEnvVars: ['WHATSAPP_WEBHOOK_SECRET', 'WHATSAPP_ACCESS_TOKEN', 'WHATSAPP_PHONE_NUMBER_ID']
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -139,6 +147,49 @@ const verifyWebhook: WebhookVerifyHandler = (query) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const parseEvents = (request: RuntimeRequest): ParsedEvent[] => parseWhatsAppRuntimeRequest(request);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OUTBOUND HANDLER
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface WhatsAppOutboundOptions {
+  accessToken: string;
+  phoneNumberId: string;
+  dedupeStore: DedupeStore;
+  apiVersion?: string;
+  baseUrl?: string;
+  timeoutMs?: number;
+}
+
+/**
+ * Process a batch of outbound intents with exactly-once semantics.
+ *
+ * - Deduplication happens BEFORE any HTTP side-effect (via dedupeStore).
+ * - Uses intent.intentId as client_msg_id for provider-side idempotency.
+ * - Handles all principal WhatsApp outbound types: text, audio, document,
+ *   contacts, reaction, template, mark_read.
+ */
+export async function processWhatsAppOutbound(
+  intents: OutboundMessageIntent[],
+  options: WhatsAppOutboundOptions
+): Promise<OutboundBatchResult> {
+  const { accessToken, phoneNumberId, dedupeStore, apiVersion, baseUrl, timeoutMs } = options;
+
+  const config: WhatsAppOutboundConfig = {
+    accessToken,
+    phoneNumberId,
+    apiVersion,
+    baseUrl,
+    timeoutMs
+  };
+
+  return processOutboundBatch(intents, (intent) => sendWhatsAppOutbound(intent, config), {
+    dedupeStore,
+    connectorId: 'whatsapp',
+    capabilityId: 'outbound_messages',
+    logger
+  });
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // APP BUILDER
