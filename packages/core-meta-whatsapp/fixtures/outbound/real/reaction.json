@@ -1,33 +1,41 @@
 {
-  "$schema": "../../src/schemas/outbound-intent.json",
-  "$description": "Valid reaction message outbound intent fixture",
-  "intent": {
-    "intentId": "01H5EXAMPLE-REACT-INTENT-12345",
-    "tenantId": "tenant_test_001",
-    "provider": "whatsapp",
-    "to": "+15551234567",
-    "payload": {
-      "type": "reaction",
-      "messageId": "wamid.HBgLMTU1NTEyMzQ1NjcVAgARGBI5QUZGQUQ1MTJCMTQ1NjdGNUEA",
-      "emoji": "👍"
+  "ok": true,
+  "result": {
+    "summary": {
+      "total": 1,
+      "sent": 1,
+      "deduped": 0,
+      "failed": 0
     },
-    "dedupeKey": "whatsapp:tenant:tenant_test_001:intent:01H5EXAMPLE-REACT-INTENT-12345",
-    "correlationId": "corr_reaction_001",
-    "createdAt": "2024-01-15T10:34:00.000Z"
-  },
-  "expectedApiPayload": {
-    "messaging_product": "whatsapp",
-    "to": "+15551234567",
-    "type": "reaction",
-    "reaction": {
-      "message_id": "wamid.HBgLMTU1NTEyMzQ1NjcVAgARGBI5QUZGQUQ1MTJCMTQ1NjdGNUEA",
-      "emoji": "👍"
-    },
-    "client_msg_id": "01H5EXAMPLE-REACT-INTENT-12345"
-  },
-  "expectedResponse": {
-    "messaging_product": "whatsapp",
-    "contacts": [{ "input": "+15551234567", "wa_id": "15551234567" }],
-    "messages": [{ "id": "wamid.HBgLMTU1NTEyMzQ1NjcVAgARGBI5QUZGQUQ1MTJCMTQ1NjdGNUVA" }]
+    "results": [
+      {
+        "intentId": "w1-real-reaction-1769020656980465806",
+        "dedupeKey": "whatsapp:w1-real-reaction-1769020656980465806",
+        "correlationId": "w1-real-reaction",
+        "provider": "whatsapp",
+        "tenantId": "staging-test",
+        "status": "sent",
+        "latencyMs": 697,
+        "upstreamStatus": 200,
+        "providerResponse": {
+          "providerMessageId": "wamid.HBgMNTU0MTg4OTkxMDc4FQIAERgSOEY4MDA3NEZENzJGODBEQjVBAA==",
+          "status": 200,
+          "raw": {
+            "messaging_product": "whatsapp",
+            "contacts": [
+              {
+                "input": "+5541988991078",
+                "wa_id": "554188991078"
+              }
+            ],
+            "messages": [
+              {
+                "id": "wamid.HBgMNTU0MTg4OTkxMDc4FQIAERgSOEY4MDA3NEZENzJGODBEQjVBAA=="
+              }
+            ]
+          }
+        }
+      }
+    ]
   }
 }

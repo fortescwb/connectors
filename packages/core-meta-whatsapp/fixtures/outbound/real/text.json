@@ -1,33 +1,41 @@
 {
-  "$schema": "../../src/schemas/outbound-intent.json",
-  "$description": "Valid text message outbound intent fixture (PII-sanitized)",
-  "intent": {
-    "intentId": "01H5EXAMPLE-TEXT-INTENT-12345678",
-    "tenantId": "tenant_test_001",
-    "provider": "whatsapp",
-    "to": "+15551234567",
-    "payload": {
-      "type": "text",
-      "text": "Hello, this is a test message.",
-      "previewUrl": false
+  "ok": true,
+  "result": {
+    "summary": {
+      "total": 1,
+      "sent": 1,
+      "deduped": 0,
+      "failed": 0
     },
-    "dedupeKey": "whatsapp:tenant:tenant_test_001:intent:01H5EXAMPLE-TEXT-INTENT-12345678",
-    "correlationId": "corr_abc123",
-    "createdAt": "2024-01-15T10:30:00.000Z"
-  },
-  "expectedApiPayload": {
-    "messaging_product": "whatsapp",
-    "to": "+15551234567",
-    "type": "text",
-    "text": {
-      "body": "Hello, this is a test message.",
-      "preview_url": false
-    },
-    "client_msg_id": "01H5EXAMPLE-TEXT-INTENT-12345678"
-  },
-  "expectedResponse": {
-    "messaging_product": "whatsapp",
-    "contacts": [{ "input": "+15551234567", "wa_id": "15551234567" }],
-    "messages": [{ "id": "wamid.HBgLMTU1NTEyMzQ1NjcVAgARGBI5QUZGQUQ1MTJCMTQ1NjdGNUEA" }]
+    "results": [
+      {
+        "intentId": "w1-real-text-1769020572412067261",
+        "dedupeKey": "whatsapp:w1-real-text-1769020572412067261",
+        "correlationId": "w1-real-text",
+        "provider": "whatsapp",
+        "tenantId": "staging-test",
+        "status": "sent",
+        "latencyMs": 571,
+        "upstreamStatus": 200,
+        "providerResponse": {
+          "providerMessageId": "wamid.HBgMNTU0MTg4OTkxMDc4FQIAERgSRDQ0MDM5Mzc3NkQwODhERUQ3AA==",
+          "status": 200,
+          "raw": {
+            "messaging_product": "whatsapp",
+            "contacts": [
+              {
+                "input": "+5541988991078",
+                "wa_id": "554188991078"
+              }
+            ],
+            "messages": [
+              {
+                "id": "wamid.HBgMNTU0MTg4OTkxMDc4FQIAERgSRDQ0MDM5Mzc3NkQwODhERUQ3AA=="
+              }
+            ]
+          }
+        }
+      }
+    ]
   }
 }

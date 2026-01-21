@@ -1,47 +1,41 @@
 {
-  "$schema": "../../src/schemas/outbound-intent.json",
-  "$description": "Valid contacts message outbound intent fixture",
-  "intent": {
-    "intentId": "01H5EXAMPLE-CONTACTS-INT-123456",
-    "tenantId": "tenant_test_001",
-    "provider": "whatsapp",
-    "to": "+15551234567",
-    "payload": {
-      "type": "contacts",
-      "contacts": [
-        {
-          "name": {
-            "formatted_name": "John Doe"
-          },
-          "phones": [
-            { "phone": "+15559876543", "type": "WORK" }
-          ],
-          "emails": [
-            { "email": "john.doe@example.com", "type": "WORK" }
-          ]
-        }
-      ]
+  "ok": true,
+  "result": {
+    "summary": {
+      "total": 1,
+      "sent": 1,
+      "deduped": 0,
+      "failed": 0
     },
-    "dedupeKey": "whatsapp:tenant:tenant_test_001:intent:01H5EXAMPLE-CONTACTS-INT-123456",
-    "correlationId": "corr_contacts_001",
-    "createdAt": "2024-01-15T10:33:00.000Z"
-  },
-  "expectedApiPayload": {
-    "messaging_product": "whatsapp",
-    "to": "+15551234567",
-    "type": "contacts",
-    "contacts": [
+    "results": [
       {
-        "name": { "formatted_name": "John Doe" },
-        "phones": [{ "phone": "+15559876543", "type": "WORK" }],
-        "emails": [{ "email": "john.doe@example.com", "type": "WORK" }]
+        "intentId": "w1-real-contacts-fix-1769020707105386615",
+        "dedupeKey": "whatsapp:w1-real-contacts-fix-1769020707105386615",
+        "correlationId": "w1-real-contacts-fix",
+        "provider": "whatsapp",
+        "tenantId": "staging-test",
+        "status": "sent",
+        "latencyMs": 616,
+        "upstreamStatus": 200,
+        "providerResponse": {
+          "providerMessageId": "wamid.HBgMNTU0MTg4OTkxMDc4FQIAERgSNDE1N0RBNTE1QUEzNkFFQTg5AA==",
+          "status": 200,
+          "raw": {
+            "messaging_product": "whatsapp",
+            "contacts": [
+              {
+                "input": "+5541988991078",
+                "wa_id": "554188991078"
+              }
+            ],
+            "messages": [
+              {
+                "id": "wamid.HBgMNTU0MTg4OTkxMDc4FQIAERgSNDE1N0RBNTE1QUEzNkFFQTg5AA=="
+              }
+            ]
+          }
+        }
       }
-    ],
-    "client_msg_id": "01H5EXAMPLE-CONTACTS-INT-123456"
-  },
-  "expectedResponse": {
-    "messaging_product": "whatsapp",
-    "contacts": [{ "input": "+15551234567", "wa_id": "15551234567" }],
-    "messages": [{ "id": "wamid.HBgLMTU1NTEyMzQ1NjcVAgARGBI5QUZGQUQ1MTJCMTQ1NjdGNUQA" }]
+    ]
   }
 }
