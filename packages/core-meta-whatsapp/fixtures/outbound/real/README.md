@@ -12,16 +12,16 @@ Fixtures capturados de envios reais via staging Meta WhatsApp Business API.
 | `reaction.json` | ✅ Enviado e recebido | Emoji 👍 reagido a mensagem |
 | `mark_read.json` | ✅ Enviado | Marcação de leitura (invisível ao usuário) |
 | `template.json` | ⚠️ Falhou | Template "hello_world" não existe na conta |
-| `audio.json` | ⚠️ Limitação | Enviado mas não recebido (ver abaixo) |
+| `audio.json` | ✅ Enviado e recebido | Mensagem de voz via mediaId (ver abaixo) |
 
-## ⚠️ Limitação Conhecida: Audio
+## ✅ Audio: Validado com MediaId
 
-O fixture `audio.json` foi capturado com `status: "sent"` e `upstreamStatus: 200`, mas o áudio não foi recebido no dispositivo final.
+O fixture `audio.json` foi capturado usando o método correto:
+1. Upload de arquivo OGG Opus (mono, 16kHz) via Meta Media API
+2. Obtenção do `mediaId` retornado
+3. Envio usando `mediaId` (não `mediaUrl`)
 
-**Causa:** WhatsApp tem requisitos específicos para áudio:
-- **Formato recomendado:** OGG com codec **Opus** (mono, 16kHz)
-- **Limitação de URLs:** WhatsApp pode rejeitar URLs externas públicas
-- **Solução recomendada:** Usar `mediaId` após fazer upload via Media API da Meta
+**Resultado:** Áudio recebido como mensagem de voz nativa no WhatsApp (ícone de microfone)
 
 **Para produção:**
 1. Fazer upload do arquivo de áudio via [Upload Media API](https://developers.facebook.com/docs/whatsapp/cloud-api/reference/media#upload-media)
