@@ -1,0 +1,13 @@
+{
+  "$schema": "../../src/schemas/outbound-intent.json",
+  "$description": "Valid mark_read intent fixture for WhatsApp read receipts",
+  "messageId": "wamid.HBgLMTU1NTEyMzQ1NjcVAgARGBI5QUZGQUQ1MTJCMTQ1NjdGNUEA",
+  "expectedApiPayload": {
+    "messaging_product": "whatsapp",
+    "status": "read",
+    "message_id": "wamid.HBgLMTU1NTEyMzQ1NjcVAgARGBI5QUZGQUQ1MTJCMTQ1NjdGNUEA"
+  },
+  "expectedResponse": {
+    "success": true
+  }
+}
