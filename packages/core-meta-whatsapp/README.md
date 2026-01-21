@@ -4,20 +4,69 @@ Parser, schemas, and outbound message sender for Meta WhatsApp Business API.
 
 ## Principal Functionality Status
 
+> **Status definition:**
+> - **✅ Implemented**: Code complete, unit tests passing, fixtures present
+> - **🟡 Active (Staging)**: Builders + testes completo, pendente validação com tráfego real em staging
+> - **🟢 REAL (Production-Ready)**: Fixtures reais capturados, integração testada, pronto para produção
+
 | Capability | Status | Notes |
 |------------|--------|-------|
-| **Inbound messages** | ✅ Implemented | text, image, document, webhook verification |
-| **Status updates** | ✅ Implemented | sent, delivered, read, failed |
-| **Outbound: text** | ✅ Implemented | with preview_url support |
-| **Outbound: audio** | ✅ Implemented | via media ID or URL |
-| **Outbound: document** | ✅ Implemented | with filename, caption support |
-| **Outbound: contacts** | ✅ Implemented | vCard-style contact sharing |
-| **Outbound: reaction** | ✅ Implemented | emoji reactions to messages |
-| **Outbound: template** | ✅ Implemented | template messages with components |
-| **Mark as read** | ✅ Implemented | read receipts |
+| **Inbound messages** | ✅ Active | text, image, document, webhook verification, dedupe by wamid |
+| **Status updates** | ✅ Active | sent, delivered, read, failed, dedupe by id+status |
+| **Outbound: text** | 🟡 Active | builders complete, retry/backoff, preview_url support, fixtures present |
+| **Outbound: audio** | 🟡 Active | builders complete, mediaId/mediaUrl support, retry/backoff, fixtures present |
+| **Outbound: document** | 🟡 Active | builders complete, filename/caption support, retry/backoff, fixtures present |
+| **Outbound: contacts** | 🟡 Active | builders complete, multi-contact vCard support, fixtures present |
+| **Outbound: reaction** | 🟡 Active | builders complete, emoji support, fixtures present |
+| **Outbound: template** | 🟡 Active | builders complete, components/parameters, retry/backoff, fixtures present |
+| **Mark as read** | 🟡 Active | builders complete, read receipts, retry/backoff, fixtures present |
 | Template management | 📋 Backlog | CRUD operations for templates |
 | Media upload | 📋 Backlog | Upload media to WhatsApp servers |
 | Interactive messages | 📋 Backlog | Buttons, lists, product messages |
+
+## Status Transition: Active → REAL
+
+The 7 outbound types (text, audio, document, contacts, reaction, template, mark_read) are currently **🟡 Active** and transition to **🟢 REAL** through staging validation.
+
+### What's complete:
+- ✅ Builders (payload generation per type)
+- ✅ Retry/backoff with exponential delays
+- ✅ Idempotency via `clientMessageId` = `intentId`
+- ✅ Dedupe before HTTP (zero side-effect duplication on retry)
+- ✅ Example fixtures for all types
+- ✅ 34 unit tests covering payload + retry scenarios
+- ✅ 12 integration tests with Redis dedupe across concurrent runners
+
+### What's pending (staging validation):
+- [ ] **Real fixtures** captured from staging Graph API (sanitized)
+- [ ] **End-to-end tráfego real** validation in staging
+- [ ] **Observability** spot-check (no PII in logs)
+- [ ] **Smoke test** rollback drill
+
+### How to capture real fixtures:
+
+See [FIXTURES_CAPTURE_GUIDE.md](./FIXTURES_CAPTURE_GUIDE.md) for step-by-step procedures.
+
+Quick example (text message):
+
+```bash
+curl -X POST http://localhost:3000/__staging/outbound \
+  -H "X-Staging-Token: $STAGING_OUTBOUND_TOKEN" \
+  -d '{
+    "intents": [{
+      "intentId": "01H5EXAMPLE-TEXT-001",
+      "tenantId": "staging-test",
+      "provider": "whatsapp",
+      "to": "+5511999999999",
+      "payload": { "type": "text", "text": "Olá" },
+      "dedupeKey": "whatsapp:tenant:staging-test:intent:01H5EXAMPLE-TEXT-001",
+      "correlationId": "corr-1",
+      "createdAt": "2024-01-21T10:00:00.000Z"
+    }]
+  }'
+```
+
+After capturing 6 real fixtures and validating staging tests pass, mark as **🟢 REAL** in manifest.
 
 ## Purpose
 

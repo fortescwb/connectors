@@ -1,0 +1,8 @@
+[0;34mℹ[0m Iniciando W1 — Captura de Fixtures Reais
+[0;34mℹ[0m Log: W1_CAPTURE_20260121_150835.log
+[0;34mℹ[0m URL: https://whatsapp-connector-staging-693285708638.us-central1.run.app
+[0;34mℹ[0m Token: PLACEHOLDE***
+[0;34mℹ[0m Telefone: +554284027199
+[0;34mℹ[0m Verificando pré-requisitos...
+[0;32m✓[0m curl disponível
+[0;31m✗[0m jq não está instalado

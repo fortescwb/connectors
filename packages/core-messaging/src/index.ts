@@ -6,6 +6,7 @@ export {
   TextMessagePayloadSchema,
   AudioMessagePayloadSchema,
   DocumentMessagePayloadSchema,
+  ImageMessagePayloadSchema,
   ContactsMessagePayloadSchema,
   ContactInfoSchema,
   ReactionMessagePayloadSchema,

@@ -1,3 +1,9 @@
+# 0. Documentos que devem ser lidos como anexo a esse.
+
+ * conectores_meta-graph.md
+ * CRITERIOS_FINAL_ACEITE_REPOSITORIO_CONNECTORS.md
+ * TODO_list_roadmap.md
+
 # Fase A — WhatsApp: fechar outbound “surface completo” (primeiro)
 
 Você já tem runtime/dedupe end-to-end e text outbound melhorado; agora é completar “o que a API permite” para outbound.

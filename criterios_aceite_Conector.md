@@ -1,3 +1,9 @@
+# 0. Documentos que devem ser lidos como anexo a esse.
+
+ * conectores_meta-graph.md
+ * CRITERIOS_FINAL_ACEITE_REPOSITORIO_CONNECTORS.md
+ * TODO_list_roadmap.md
+
 # 1. Cobertura Funcional Completa por Canal (OBRIGATÓRIO)
 
 Para **cada canal**, **As funcionalidades disponibilizadas oficialmente por cada plataforma** devem estar implementadas, **não-principal = out of scope / future backlog**.

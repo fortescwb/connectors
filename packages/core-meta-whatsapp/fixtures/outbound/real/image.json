@@ -1,0 +1,24 @@
+{
+  "ok": true,
+  "result": {
+    "summary": {
+      "total": 1,
+      "sent": 0,
+      "deduped": 0,
+      "failed": 1
+    },
+    "results": [
+      {
+        "intentId": "w1-image-1769032840674",
+        "dedupeKey": "whatsapp:w1-image-1769032840674",
+        "correlationId": "w1-corr-image",
+        "provider": "whatsapp",
+        "tenantId": "staging-test",
+        "status": "failed",
+        "errorCode": "send_failed",
+        "errorMessage": "Unsupported payload type \"image\" for WhatsApp outbound",
+        "latencyMs": 3
+      }
+    ]
+  }
+}

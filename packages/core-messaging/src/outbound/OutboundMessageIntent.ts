@@ -31,6 +31,14 @@ export const DocumentMessagePayloadSchema = z.object({
   caption: z.string().optional()
 });
 
+/** Image message payload - at least one of mediaId/mediaUrl must be provided */
+export const ImageMessagePayloadSchema = z.object({
+  type: z.literal('image'),
+  mediaId: z.string().min(1).optional(),
+  mediaUrl: z.string().url().optional(),
+  caption: z.string().optional()
+});
+
 /** Contact info schema (for contacts message) */
 export const ContactInfoSchema = z.object({
   name: z.object({
@@ -99,6 +107,7 @@ export const OutboundMessagePayloadSchema = z.discriminatedUnion('type', [
   TextMessagePayloadSchema,
   AudioMessagePayloadSchema,
   DocumentMessagePayloadSchema,
+  ImageMessagePayloadSchema,
   ContactsMessagePayloadSchema,
   ReactionMessagePayloadSchema,
   MarkReadPayloadSchema,

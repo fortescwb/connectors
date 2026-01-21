@@ -318,5 +318,73 @@ if (!redisSetup.ok) {
       expect(first.summary.failed).toBe(1);
       expect(second.summary.deduped).toBe(1);
     });
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Per-type deduplication and retry tests
+    // ─────────────────────────────────────────────────────────────────────────
+    it.each(['audio', 'document', 'contacts', 'reaction', 'template'])(
+      '%s: timeout + retry dedupes correctly without duplicating side-effect',
+      async (type) => {
+        const fixtureName = `example_${type}_message`;
+        const keyPrefix = makeKeyPrefix();
+        const store = new RedisDedupeStore({ client: createAdapter(redisSetup.clientA), keyPrefix, failMode: 'open' });
+        const intent = loadOutboundIntent(fixtureName);
+
+        let attempts = 0;
+        const flakySender = async () => {
+          attempts += 1;
+          if (attempts === 1) {
+            const err = new Error('timeout');
+            err.name = 'AbortError';
+            throw err;
+          }
+          return { providerMessageId: `wamid.${type}.${attempts}` };
+        };
+
+        const send = (i: OutboundMessageIntent) =>
+          sendWhatsAppOutbound(i, {
+            accessToken: 'token-test',
+            phoneNumberId,
+            baseUrl: 'http://127.0.0.1:0',
+            transport: flakySender,
+            retry: { maxRetries: 0 }
+          });
+
+        const first = await processOutboundBatch([intent], send, { dedupeStore: store });
+        const second = await processOutboundBatch([intent], send, { dedupeStore: store });
+
+        expect(attempts).toBe(1);
+        expect(first.summary.failed).toBe(1);
+        expect(second.summary.deduped).toBe(1);
+      }
+    );
+
+    it('concurrent sends of same intent across multiple runners for mark_read do not duplicate', async () => {
+      const keyPrefix = makeKeyPrefix();
+      const storeA = new RedisDedupeStore({ client: createAdapter(redisSetup.clientA), keyPrefix, failMode: 'open' });
+      const storeB = new RedisDedupeStore({ client: createAdapter(redisSetup.clientB), keyPrefix, failMode: 'open' });
+
+      const intent: OutboundMessageIntent = makeIntent({
+        payload: { type: 'mark_read', messageId: 'wamid.MARK.READ.TEST' }
+      });
+
+      const send = (i: OutboundMessageIntent) =>
+        sendWhatsAppOutbound(i, {
+          accessToken: 'token-test',
+          phoneNumberId: '999999999',
+          baseUrl: 'http://127.0.0.1:0',
+          transport: async () => new Response(JSON.stringify({ success: true }), { status: 200 }),
+          retry: { maxRetries: 0 }
+        });
+
+      const [resultA, resultB] = await Promise.all([
+        processOutboundBatch([intent], send, { dedupeStore: storeA }),
+        processOutboundBatch([intent], send, { dedupeStore: storeB })
+      ]);
+
+      // One should succeed, one should dedupe
+      expect(resultA.summary.sent + resultB.summary.sent).toBe(1);
+      expect(resultA.summary.deduped + resultB.summary.deduped).toBe(1);
+    });
   });
 }

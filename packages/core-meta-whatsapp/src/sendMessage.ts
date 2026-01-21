@@ -73,6 +73,32 @@ function buildDocumentPayload(intent: OutboundMessageIntent): Record<string, unk
   };
 }
 
+function buildImagePayload(intent: OutboundMessageIntent): Record<string, unknown> {
+  const payload = intent.payload;
+  if (payload.type !== 'image') {
+    throw new Error(`buildImagePayload: expected type 'image', got '${payload.type}'`);
+  }
+
+  const imageBlock: Record<string, string> = {};
+  if ('mediaId' in payload && payload.mediaId) {
+    imageBlock.id = payload.mediaId;
+  } else if ('mediaUrl' in payload && payload.mediaUrl) {
+    imageBlock.link = payload.mediaUrl;
+  }
+  if (payload.caption) {
+    imageBlock.caption = payload.caption;
+  }
+
+  return {
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
+    to: intent.to,
+    type: 'image',
+    image: imageBlock,
+    client_msg_id: intent.intentId
+  };
+}
+
 function buildContactsPayload(intent: OutboundMessageIntent): Record<string, unknown> {
   const payload = intent.payload;
   if (payload.type !== 'contacts') {
@@ -181,6 +207,8 @@ function buildPayload(intent: OutboundMessageIntent): Record<string, unknown> {
       return buildAudioPayload(intent);
     case 'document':
       return buildDocumentPayload(intent);
+    case 'image':
+      return buildImagePayload(intent);
     case 'contacts':
       return buildContactsPayload(intent);
     case 'reaction':

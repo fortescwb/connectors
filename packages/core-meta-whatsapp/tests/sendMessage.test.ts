@@ -413,4 +413,238 @@ describe('sendWhatsAppOutbound', () => {
     expect(body).toMatchObject({ status: 'read', message_id: 'wamid.TEST.READ' });
     expect((result as { success?: boolean }).success).toBe(true);
   });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Retry and error handling tests for all message types
+  // ─────────────────────────────────────────────────────────────────────────
+  it.each(['audio', 'document', 'contacts', 'reaction', 'template'])(
+    '%s: retries on 5xx then succeeds without duplicating side-effect',
+    async (type) => {
+      vi.useFakeTimers();
+      const fixture = type === 'audio' ? audioFixture :
+                      type === 'document' ? documentFixture :
+                      type === 'contacts' ? contactsFixture :
+                      type === 'reaction' ? reactionFixture :
+                      templateFixture;
+
+      const responses = [
+        new Response(JSON.stringify({ error: { message: 'Internal error' } }), { status: 500 }),
+        new Response(JSON.stringify(fixture.expectedResponse), { status: 200 })
+      ];
+      const transport = vi.fn(async () => responses.shift()!);
+
+      const intent = makeIntentFromFixture(fixture as { intent: OutboundMessageIntent });
+
+      const promise = sendMessage(intent, {
+        accessToken: 'token-test',
+        phoneNumberId: '12345',
+        transport,
+        retry: { initialDelayMs: 5, maxDelayMs: 5, multiplier: 1, jitter: false, maxRetries: 2 }
+      });
+
+      await vi.runAllTimersAsync();
+      const result = await promise;
+
+      expect(result.providerMessageId).toBeDefined();
+      expect(transport).toHaveBeenCalledTimes(2);
+      vi.useRealTimers();
+    }
+  );
+
+  it('audio payload correctly handles mediaUrl (link) instead of mediaId', async () => {
+    const calls: Array<{ body?: string }> = [];
+    const transport = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ body: init?.body as string });
+      return new Response(JSON.stringify(audioFixture.expectedResponse), { status: 200 });
+    });
+
+    const intent = makeIntent({
+      payload: {
+        type: 'audio',
+        mediaUrl: 'https://example.com/audio.mp3'
+      }
+    });
+
+    await sendMessage(intent, {
+      accessToken: 'token-test',
+      phoneNumberId: '12345',
+      transport,
+      retry: { maxRetries: 0 }
+    });
+
+    expect(calls).toHaveLength(1);
+    const body = JSON.parse(calls[0]?.body ?? '{}');
+    expect(body.audio).toMatchObject({ link: 'https://example.com/audio.mp3' });
+  });
+
+  it('document payload correctly includes filename and caption when provided', async () => {
+    const calls: Array<{ body?: string }> = [];
+    const transport = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ body: init?.body as string });
+      return new Response(JSON.stringify(documentFixture.expectedResponse), { status: 200 });
+    });
+
+    const intent = makeIntent({
+      payload: {
+        type: 'document',
+        mediaUrl: 'https://example.com/file.pdf',
+        filename: 'contract.pdf',
+        caption: 'Please review'
+      }
+    });
+
+    await sendMessage(intent, {
+      accessToken: 'token-test',
+      phoneNumberId: '12345',
+      transport,
+      retry: { maxRetries: 0 }
+    });
+
+    expect(calls).toHaveLength(1);
+    const body = JSON.parse(calls[0]?.body ?? '{}');
+    expect(body.document).toMatchObject({
+      link: 'https://example.com/file.pdf',
+      filename: 'contract.pdf',
+      caption: 'Please review'
+    });
+  });
+
+  it('template payload correctly handles multiple components and parameters', async () => {
+    const calls: Array<{ body?: string }> = [];
+    const transport = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ body: init?.body as string });
+      return new Response(JSON.stringify(templateFixture.expectedResponse), { status: 200 });
+    });
+
+    const intent = makeIntent({
+      payload: {
+        type: 'template',
+        templateName: 'order_status',
+        languageCode: 'pt_BR',
+        components: [
+          {
+            type: 'body',
+            parameters: [
+              { type: 'text', text: 'ABC123' },
+              { type: 'text', text: 'Confirmado' }
+            ]
+          }
+        ]
+      }
+    });
+
+    await sendMessage(intent, {
+      accessToken: 'token-test',
+      phoneNumberId: '12345',
+      transport,
+      retry: { maxRetries: 0 }
+    });
+
+    expect(calls).toHaveLength(1);
+    const body = JSON.parse(calls[0]?.body ?? '{}');
+    expect(body.template).toMatchObject({
+      name: 'order_status',
+      language: { code: 'pt_BR' }
+    });
+    expect(body.template.components[0].parameters).toHaveLength(2);
+  });
+
+  it('reaction payload correctly targets specific message and uses emoji', async () => {
+    const calls: Array<{ body?: string }> = [];
+    const transport = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ body: init?.body as string });
+      return new Response(JSON.stringify(reactionFixture.expectedResponse), { status: 200 });
+    });
+
+    const intent = makeIntent({
+      payload: {
+        type: 'reaction',
+        messageId: 'wamid.TARGET.MESSAGE.ID',
+        emoji: '👍'
+      }
+    });
+
+    await sendMessage(intent, {
+      accessToken: 'token-test',
+      phoneNumberId: '12345',
+      transport,
+      retry: { maxRetries: 0 }
+    });
+
+    expect(calls).toHaveLength(1);
+    const body = JSON.parse(calls[0]?.body ?? '{}');
+    expect(body.reaction).toMatchObject({
+      message_id: 'wamid.TARGET.MESSAGE.ID',
+      emoji: '👍'
+    });
+  });
+
+  it('contacts payload includes multiple contacts with phones and emails', async () => {
+    const calls: Array<{ body?: string }> = [];
+    const transport = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ body: init?.body as string });
+      return new Response(JSON.stringify(contactsFixture.expectedResponse), { status: 200 });
+    });
+
+    const intent = makeIntent({
+      payload: {
+        type: 'contacts',
+        contacts: [
+          {
+            name: {
+              formatted_name: 'Alice Smith',
+              first_name: 'Alice',
+              last_name: 'Smith'
+            },
+            phones: [
+              { phone: '+15551112222', type: 'CELL' },
+              { phone: '+15553334444', type: 'WORK' }
+            ],
+            emails: [
+              { email: 'alice@example.com', type: 'WORK' }
+            ]
+          }
+        ]
+      }
+    });
+
+    await sendMessage(intent, {
+      accessToken: 'token-test',
+      phoneNumberId: '12345',
+      transport,
+      retry: { maxRetries: 0 }
+    });
+
+    expect(calls).toHaveLength(1);
+    const body = JSON.parse(calls[0]?.body ?? '{}');
+    expect(body.contacts).toHaveLength(1);
+    expect(body.contacts[0]).toHaveProperty('phones');
+    expect(body.contacts[0].phones).toHaveLength(2);
+    expect(body.contacts[0].emails).toHaveLength(1);
+  });
+
+  it('all message types include client_msg_id for idempotency', async () => {
+    const fixtures = [audioFixture, documentFixture, contactsFixture, reactionFixture, templateFixture];
+    
+    for (const fixture of fixtures) {
+      const calls: Array<{ body?: string }> = [];
+      const transport = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+        calls.push({ body: init?.body as string });
+        return new Response(JSON.stringify(fixture.expectedResponse), { status: 200 });
+      });
+
+      const intent = makeIntentFromFixture(fixture as { intent: OutboundMessageIntent });
+
+      await sendMessage(intent, {
+        accessToken: 'token-test',
+        phoneNumberId: '12345',
+        transport,
+        retry: { maxRetries: 0 }
+      });
+
+      expect(calls).toHaveLength(1);
+      const body = JSON.parse(calls[0]?.body ?? '{}');
+      expect(body.client_msg_id).toBe(intent.intentId);
+    }
+  });
 });

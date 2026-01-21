@@ -51,6 +51,8 @@ Abaixo está o **documento único** que substitui:
 
 ## 1. WHATSAPP (Meta WhatsApp Business API)
 
+> **Status:** 🟡 **STAGING DEPLOYED** — aguardando validação real antes de produção
+
 ### 1.1 Inbound (Mensagens recebidas)
 
 * [x] Receber payload real do WhatsApp
@@ -85,24 +87,117 @@ Abaixo está o **documento único** que substitui:
 
 ### 1.3 Outbound (envio de mensagens)
 
-* [ ] Enviar mensagens via Graph API
-* [ ] Suporte a:
-
-  * Texto
-  * Template
-  * Áudio
-  * Imagem
-  * Vídeo
-  * Documento
-* [ ] Retry/backoff
-* [ ] Idempotência por `clientMessageId`
-* [ ] Capability `outbound_messages` → active
+* [x] Enviar mensagens via Graph API
+* [x] Builders por tipo implementados:
+  * text
+  * template
+  * audio
+  * document
+  * contacts
+  * reaction
+  * mark_read
+* [x] Retry/backoff
+* [x] Idempotência por `intentId`
+* [x] Dedupe antes de HTTP (side-effect protegido)
+* [ ] **Fixtures reais de produção** (em captura)
+* [ ] Capability `outbound_messages` → active (aguarda validação staging)
 
 ### 1.4 Webhook verification & security
 
 * [x] Verify token
 * [x] Validação de assinatura
 * [x] Raw body seguro
+
+### 1.5 Infraestrutura Staging (DEPLOYED)
+
+* [x] Deploy Cloud Run staging
+* [x] Redis via Upstash (dedupe distribuído)
+* [x] Secrets via Secret Manager (REDIS_URL, tokens)
+* [x] Fail-closed: sem Redis → outbound bloqueado
+* [x] Logs estruturados (correlationId, dedupeKey, outcome)
+* [ ] Varredura de PII/secrets em logs (pendente validação)
+
+---
+
+### 1.6 🚦 VALIDAÇÃO STAGING → PRODUÇÃO (OBRIGATÓRIO)
+
+> **Deploy em staging "funcionando" não significa pronto.**
+> **Pronto = tráfego real + fixtures reais + idempotência verificada + observabilidade mínima.**
+
+#### 1.6.1 Boot e Governança (pré-requisito)
+
+* [x] Fail-closed: sem `REDIS_URL` → serviço não sobe / outbound bloqueado
+* [x] Secrets 100% via Secret Manager
+* [ ] Varredura de logs: sem tokens (`EAAG`, `EAA`), sem `rediss://`, sem números completos
+
+#### 1.6.2 Webhook Inbound Real
+
+* [ ] Verificação GET estável em staging
+* [ ] Assinatura HMAC: recusa requests inválidos
+* [ ] Reentrega de evento: dedupe funciona (não duplica)
+* [ ] Teste: reenviar mesmo payload → `deduped=true`
+
+#### 1.6.3 Outbound Side-Effects (crítico)
+
+* [ ] Dedupe ocorre **antes** de HTTP ao Graph
+* [ ] `intentId` estável entre retries
+* [ ] Timeout + retry **não duplica** mensagem
+* [ ] Teste via `/__staging/outbound`:
+  * 1º envio: `sent=1, deduped=0`
+  * 2º envio: `sent=0, deduped=1`
+
+#### 1.6.4 Funcionalidades Principais (tráfego real)
+
+* [ ] text — validado em staging
+* [ ] template — validado em staging
+* [ ] audio — validado em staging
+* [ ] document — validado em staging
+* [ ] contacts — validado em staging
+* [ ] reaction — validado em staging
+* [ ] mark_read — validado em staging
+
+#### 1.6.5 Observabilidade Operacional
+
+* [ ] Logs com: `correlationId`, `dedupeKey`, `outcome`, `attempt`, `statusCode`
+* [ ] Diagnóstico rápido de falhas (rate limit, invalid token, template inválido)
+* [ ] Alarmes mínimos: pico 5xx, crescimento retries, dedupe anormal
+
+---
+
+### 1.7 🔄 CICLOS DE VALIDAÇÃO STAGING
+
+#### Ciclo W1 — Captura Real + Saneamento (BLOQUEANTE)
+
+* [ ] Rodar outbound real em staging para cada tipo principal
+* [ ] Guardar request/response sanitizado como fixtures reais
+* [ ] Confirmar que `sendWhatsAppOutbound` aceita variações reais do Graph
+* [ ] Substituir fixtures `example_` por `realistic_sanitized_`
+* [ ] README atualizado com exemplos reais
+
+#### Ciclo W2 — Templates Robusto
+
+* [ ] Validar templates reais existentes no WABA (componentes, parâmetros, idiomas)
+* [ ] Testar erros: template inexistente, variável faltando, idioma inválido
+* [ ] Garantir idempotência cobre templates
+
+#### Ciclo W3 — Media (audio/document) Robusto
+
+* [ ] Enviar por `mediaId` (mais comum e robusto)
+* [ ] Testar upload + envio
+* [ ] Validar erros: media não encontrada, formato inválido
+
+#### Ciclo W4 — Reactions + mark_read
+
+* [ ] Reação em mensagem existente (IDs reais)
+* [ ] mark_read com IDs reais de inbound
+* [ ] Validar autorização/escopo
+
+#### Ciclo W5 — Critérios Finais Production
+
+* [ ] Smoke tests repetidos
+* [ ] Carga leve (50 intents) para validar concorrência + dedupe
+* [ ] Rollback drill: subir revisão anterior e voltar
+* [ ] **GO/NO-GO final aprovado**
 
 ---
 

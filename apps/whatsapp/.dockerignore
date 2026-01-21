@@ -1,0 +1,80 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# .dockerignore - WhatsApp Connector
+# ─────────────────────────────────────────────────────────────────────────────
+# Excludes files not needed in Docker build to reduce context size and build time.
+#
+# PHILOSOPHY:
+# - Explicit inclusion is safer than exclusion in monorepos
+# - But exclusion is sufficient here since we COPY specific paths in Dockerfile
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# Dependencies (will be installed fresh in Docker)
+node_modules
+**/node_modules
+pnpm-lock.yaml
+
+# Build artifacts (will be built in Docker)
+dist
+**/dist
+build
+**/build
+.turbo
+.next
+
+# Tests
+**/*.test.ts
+**/*.test.js
+**/*.spec.ts
+**/*.spec.js
+**/tests
+**/__tests__
+coverage
+.nyc_output
+
+# Development
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs
+**/*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Environment files (secrets should be injected at runtime)
+.env
+.env.*
+!.env.example
+
+# Documentation (not needed at runtime)
+*.md
+!README.md
+docs
+**/docs
+
+# CI/CD
+.github
+.gitlab
+.circleci
+azure-pipelines.yml
+.travis.yml
+
+# Misc
+*.bak
+*.tmp
+.cache
+.temp

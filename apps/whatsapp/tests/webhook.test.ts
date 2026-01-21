@@ -33,7 +33,7 @@ describe('whatsapp app', () => {
   });
 
   it('responds 200 on /health', async () => {
-    const app = buildApp();
+    const app = await buildApp();
     const response = await request(app).get('/health');
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ status: 'ok', connector: 'whatsapp' });
@@ -41,7 +41,7 @@ describe('whatsapp app', () => {
 
   describe('POST /webhook', () => {
     it('rejects invalid webhook payload with 400', async () => {
-      const app = buildApp();
+      const app = await buildApp();
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
       const response = await request(app).post('/webhook').send({});
@@ -57,7 +57,7 @@ describe('whatsapp app', () => {
 
     it('processes batch payload and returns summary with 200', async () => {
       const payload = loadFixture('message_batch.json');
-      const app = buildApp();
+      const app = await buildApp();
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
       const response = await request(app).post('/webhook').send(payload);
@@ -88,7 +88,7 @@ describe('whatsapp app', () => {
 
     it('dedupes repeated payloads across requests', async () => {
       const payload = loadFixture('message_duplicate.json');
-      const app = buildApp();
+      const app = await buildApp();
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
       const first = await request(app).post('/webhook').send(payload);
@@ -124,7 +124,7 @@ describe('whatsapp app', () => {
         delete process.env.WHATSAPP_WEBHOOK_SECRET;
         const payload = loadFixture('message_duplicate.json');
 
-        const app = buildApp();
+        const app = await buildApp();
         const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
         const response = await request(app).post('/webhook').send(payload);
@@ -153,7 +153,7 @@ describe('whatsapp app', () => {
         const rawBody = JSON.stringify(payload);
         const signature = generateHmacSha256(TEST_SECRET, rawBody, 'sha256=');
 
-        const app = buildApp();
+        const app = await buildApp();
         const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
         const response = await request(app)
@@ -177,7 +177,7 @@ describe('whatsapp app', () => {
         const rawBody = JSON.stringify(payload);
         const invalidSignature = generateHmacSha256('wrong-secret', rawBody, 'sha256=');
 
-        const app = buildApp();
+        const app = await buildApp();
 
         const response = await request(app)
           .post('/webhook')
@@ -195,7 +195,7 @@ describe('whatsapp app', () => {
         process.env.WHATSAPP_WEBHOOK_SECRET = TEST_SECRET;
         const payload = loadFixture('message_batch.json');
 
-        const app = buildApp();
+        const app = await buildApp();
 
         const response = await request(app).post('/webhook').send(payload);
 
@@ -211,7 +211,7 @@ describe('whatsapp app', () => {
     it('returns 200 with challenge when verification is valid', async () => {
       process.env.WHATSAPP_VERIFY_TOKEN = TEST_VERIFY_TOKEN;
 
-      const app = buildApp();
+      const app = await buildApp();
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
       const challenge = 'test-challenge-string-12345';
 
@@ -234,7 +234,7 @@ describe('whatsapp app', () => {
     it('returns 403 when verify token is invalid', async () => {
       process.env.WHATSAPP_VERIFY_TOKEN = TEST_VERIFY_TOKEN;
 
-      const app = buildApp();
+      const app = await buildApp();
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
       const challenge = 'test-challenge-string';
 
@@ -259,7 +259,7 @@ describe('whatsapp app', () => {
     it('returns 403 when hub.mode is not subscribe', async () => {
       process.env.WHATSAPP_VERIFY_TOKEN = TEST_VERIFY_TOKEN;
 
-      const app = buildApp();
+      const app = await buildApp();
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
       const response = await request(app)
@@ -283,7 +283,7 @@ describe('whatsapp app', () => {
     it('returns 503 when WHATSAPP_VERIFY_TOKEN is not configured', async () => {
       delete process.env.WHATSAPP_VERIFY_TOKEN;
 
-      const app = buildApp();
+      const app = await buildApp();
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
       const response = await request(app)
@@ -307,7 +307,7 @@ describe('whatsapp app', () => {
 
   describe('correlationId propagation', () => {
     it('preserves incoming x-correlation-id header in response', async () => {
-      const app = buildApp();
+      const app = await buildApp();
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
       const customCorrelationId = 'cid-test-123';
@@ -326,7 +326,7 @@ describe('whatsapp app', () => {
     });
 
     it('generates correlationId when not provided in request', async () => {
-      const app = buildApp();
+      const app = await buildApp();
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
       const payload = loadFixture('message_duplicate.json');
@@ -344,7 +344,7 @@ describe('whatsapp app', () => {
     it('preserves correlationId in 401 error response', async () => {
       process.env.WHATSAPP_WEBHOOK_SECRET = TEST_SECRET;
 
-      const app = buildApp();
+      const app = await buildApp();
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
       const customCorrelationId = 'cid-error-test-456';

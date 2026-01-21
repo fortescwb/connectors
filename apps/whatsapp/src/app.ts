@@ -1,4 +1,5 @@
 import express, { type Express } from 'express';
+import { Redis } from 'ioredis';
 
 import { createLogger } from '@connectors/core-logging';
 import { rawBodyMiddleware, type RawBodyRequest } from '@connectors/adapter-express';
@@ -11,7 +12,9 @@ import {
   type WebhookVerifyHandler,
   processOutboundBatch,
   type DedupeStore,
-  type OutboundBatchResult
+  type OutboundBatchResult,
+  InMemoryDedupeStore,
+  RedisDedupeStore
 } from '@connectors/core-runtime';
 import { capability, type ConnectorManifest } from '@connectors/core-connectors';
 import { parseWhatsAppRuntimeRequest, sendWhatsAppOutbound, type WhatsAppOutboundConfig } from '@connectors/core-meta-whatsapp';
@@ -55,6 +58,122 @@ export const whatsappManifest: ConnectorManifest = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const logger = createLogger({ service: 'whatsapp-app' });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DEDUPE STORE FACTORY
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Creates the appropriate DedupeStore based on environment configuration.
+ *
+ * PRODUCTION/STAGING (NODE_ENV=production|staging):
+ * - REDIS_URL is REQUIRED - app will fail to start without it
+ * - Uses RedisDedupeStore for distributed deduplication
+ * - Fail mode: 'closed' (blocks processing on Redis errors to prevent duplicates)
+ * - Redis connectivity validated at boot with PING (3s timeout)
+ * - Recommended: Upstash Redis (free tier: 500K commands/month, TLS enabled)
+ *
+ * DEVELOPMENT (NODE_ENV=development):
+ * - REDIS_URL optional
+ * - Uses InMemoryDedupeStore if REDIS_URL not set
+ * - InMemory is ONLY suitable for inbound (outbound requires Redis for exactly-once)
+ *
+ * @returns Promise<DedupeStore> instance (Redis or InMemory)
+ * @throws Error if staging/production and REDIS_URL not set or connection fails
+ */
+async function createDedupeStore(): Promise<DedupeStore> {
+  const redisUrl = process.env.REDIS_URL;
+  const nodeEnv = process.env.NODE_ENV || 'development';
+  const isNonDev = nodeEnv === 'production' || nodeEnv === 'staging';
+
+  // FAIL-CLOSED: In production/staging, Redis is mandatory
+  if (isNonDev && !redisUrl) {
+    const errorMsg = `REDIS_URL is required in ${nodeEnv} (NODE_ENV=${nodeEnv}). Use Upstash Redis free tier.`;
+    logger.error(errorMsg, { nodeEnv });
+    throw new Error(errorMsg);
+  }
+
+  if (redisUrl) {
+    const useTls = redisUrl.startsWith('rediss://');
+    logger.info('Initializing Redis dedupe store', {
+      nodeEnv,
+      redisProvider: 'upstash',
+      redisTls: useTls
+    });
+
+    const redis = new Redis(redisUrl, {
+      maxRetriesPerRequest: 3,
+      enableReadyCheck: true,
+      enableOfflineQueue: true,
+      lazyConnect: true,
+      retryStrategy: (times: number) => Math.min(times * 500, 3000),
+      ...(useTls && { tls: {} })
+    });
+
+    redis.on('error', (err: Error) => {
+      logger.error('Redis connection error', { error: err.message });
+    });
+
+    // FAIL-CLOSED: Validate Redis connectivity at boot in staging/production
+    if (isNonDev) {
+      const timeoutMs = 5000;
+      try {
+        // With lazyConnect: true, we must explicitly connect first
+        await Promise.race([
+          redis.connect(),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error(`Redis connect timeout after ${timeoutMs}ms`)), timeoutMs)
+          )
+        ]);
+        await redis.ping();
+        logger.info('Redis validated at boot (PING ok)', { nodeEnv });
+      } catch (err) {
+        const errorMsg = `Redis connection failed at boot in ${nodeEnv}: ${err instanceof Error ? err.message : String(err)}`;
+        logger.error(errorMsg, { nodeEnv });
+        await redis.quit().catch(() => {});
+        throw new Error(errorMsg);
+      }
+    }
+
+    // Adapter: ioredis client to RedisClient interface
+    // ioredis uses: set(key, value, 'PX', ttlMs, 'NX') for v5+
+    const redisClientAdapter = {
+      set: async (key: string, value: string, mode: 'NX', flag: 'PX', ttlMs: number): Promise<string | null> => {
+        // ioredis v5 syntax: set(key, value, 'PX', milliseconds, 'NX')
+        const result = await redis.set(key, value, flag, ttlMs, mode);
+        return result;
+      },
+      exists: async (key: string): Promise<number> => {
+        return redis.exists(key);
+      }
+    };
+
+    return new RedisDedupeStore({
+      client: redisClientAdapter,
+      keyPrefix: 'whatsapp:dedupe:',
+      failMode: isNonDev ? 'closed' : 'open', // staging/prod: fail-closed; dev: fail-open
+      onError: (error, context) => {
+        logger.error('Redis dedupe operation failed', {
+          error: error.message,
+          operation: context.operation
+          // Note: context.key not logged to avoid potential PII leakage
+        });
+      }
+    });
+  }
+
+  // Only reachable in development (nodeEnv !== 'production'/'staging')
+  logger.warn(
+    'REDIS_URL not configured - using InMemoryDedupeStore',
+    {
+      nodeEnv,
+      warning: 'ONLY suitable for inbound in development',
+      critical: 'Outbound side-effects require Redis for exactly-once guarantees'
+    }
+  );
+
+  return new InMemoryDedupeStore();
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SIGNATURE VERIFIER
@@ -195,8 +314,11 @@ export async function processWhatsAppOutbound(
 // APP BUILDER
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function buildApp(): Express {
+export async function buildApp(): Promise<Express> {
   const app = express();
+
+  // Initialize dedupe store (Redis validation in staging/production)
+  const dedupeStore = await createDedupeStore();
 
   // ─────────────────────────────────────────────────────────────────────────
   // CRITICAL: rawBodyMiddleware MUST be first middleware
@@ -215,9 +337,10 @@ export function buildApp(): Express {
     res.status(200).json({ status: 'ok', connector: whatsappManifest.id });
   });
 
-  // Build runtime handlers
+  // Build runtime handlers with dedupe store
   const { handleGet, handlePost } = buildWebhookHandlers({
     manifest: whatsappManifest,
+    dedupeStore, // Pass the dedupe store to runtime
     registry: {
       inbound_messages: async (event, ctx) => {
         ctx.logger.info('Inbound WhatsApp message handled', {
@@ -274,6 +397,103 @@ export function buildApp(): Express {
     }
 
     res.status(result.status).json(result.body);
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // STAGING OUTBOUND ENDPOINT (staging-only, token-protected)
+  // ─────────────────────────────────────────────────────────────────────────
+  // Allows controlled testing of outbound message processing in staging.
+  // SECURITY: Requires X-Staging-Token header matching STAGING_OUTBOUND_TOKEN env var.
+  // Use this to validate:
+  // - Real outbound payloads to Meta API
+  // - Distributed deduplication with Redis
+  // - Exactly-once guarantees for side-effects
+  // - Fixture generation from real API responses
+  //
+  // Example request:
+  // POST /__staging/outbound
+  // X-Staging-Token: <STAGING_OUTBOUND_TOKEN>
+  // Content-Type: application/json
+  // {
+  //   "intents": [
+  //     {
+  //       "to": "5511999999999",
+  //       "type": "text",
+  //       "text": { "body": "Test message" },
+  //       "idempotencyKey": "test-msg-001"
+  //     }
+  //   ]
+  // }
+  // ─────────────────────────────────────────────────────────────────────────
+  app.post('/__staging/outbound', express.json(), async (req, res) => {
+    const nodeEnv = process.env.NODE_ENV || 'development';
+    const stagingToken = process.env.STAGING_OUTBOUND_TOKEN;
+
+    // Only available in staging/development (not production)
+    if (nodeEnv === 'production') {
+      return res.status(404).json({ ok: false, error: 'Endpoint not available in production' });
+    }
+
+    // Token authentication
+    const providedToken = req.headers['x-staging-token'];
+    if (!stagingToken) {
+      logger.error('STAGING_OUTBOUND_TOKEN not configured');
+      return res.status(503).json({ ok: false, error: 'Staging outbound endpoint not configured' });
+    }
+    if (providedToken !== stagingToken) {
+      logger.warn('Invalid staging token attempt', { ip: req.ip });
+      return res.status(401).json({ ok: false, error: 'Invalid or missing X-Staging-Token' });
+    }
+
+    // Validate required env vars for outbound
+    const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
+    const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+    if (!accessToken || !phoneNumberId) {
+      return res.status(503).json({
+        ok: false,
+        error: 'Missing WHATSAPP_ACCESS_TOKEN or WHATSAPP_PHONE_NUMBER_ID'
+      });
+    }
+
+    // Parse and validate request body
+    const { intents } = req.body as { intents?: OutboundMessageIntent[] };
+    if (!Array.isArray(intents) || intents.length === 0) {
+      return res.status(400).json({ ok: false, error: 'Missing or empty "intents" array in request body' });
+    }
+
+    logger.info('Processing staging outbound request', {
+      intentCount: intents.length,
+      nodeEnv
+    });
+
+    try {
+      const result = await processWhatsAppOutbound(intents, {
+        accessToken,
+        phoneNumberId,
+        dedupeStore,
+        apiVersion: 'v18.0',
+        timeoutMs: 10000
+      });
+
+      logger.info('Staging outbound completed', {
+        summary: result.summary,
+        nodeEnv
+      });
+
+      return res.status(200).json({
+        ok: true,
+        result
+      });
+    } catch (err) {
+      logger.error('Staging outbound failed', {
+        error: err instanceof Error ? err.message : String(err),
+        nodeEnv
+      });
+      return res.status(500).json({
+        ok: false,
+        error: err instanceof Error ? err.message : 'Unknown error'
+      });
+    }
   });
 
   return app;
