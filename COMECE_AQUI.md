@@ -284,6 +284,15 @@ cd /home/fortes/Repositórios/connectors
 
 ---
 
+## 📌 IG1 (Instagram DM) — captura inicial
+
+- **Status**: inbound DM ativo; outbound DM disponível via endpoint `/__staging/outbound` (token-protegido) e aguardando fixtures reais para promover a capability.
+- **Script**: `./scripts/ig1-capture-fixtures.sh --url "$STAGING_URL" --token "$STAGING_TOKEN" --recipient <IG_USER_ID>`
+- **Tipos suportados**: `text`, `link`, `image`, `video`, `audio`, `document`. Demais tipos (sticker, reaction, templates) não fazem parte do contrato Instagram.
+- **Cuidado**: não commitar tokens ou IDs pessoais. Substitua as fixtures sintéticas em `packages/core-meta-instagram/fixtures` por capturas reais antes de marcar IG1 como ativo.
+
+---
+
 ## 💬 Precisa de Ajuda?
 
 1. **Dúvida técnica?** → Consulte W1_CAPTURA_FIXTURES.md

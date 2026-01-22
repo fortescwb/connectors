@@ -41,7 +41,7 @@ describe('instagram app', () => {
 
   describe('health check', () => {
     it('responds 200 on /health with connector info', async () => {
-      const app = buildApp();
+      const app = await buildApp();
       const response = await request(app).get('/health');
       expect(response.status).toBe(200);
       expect(response.body).toEqual({ status: 'ok', connector: 'instagram' });
@@ -50,7 +50,7 @@ describe('instagram app', () => {
 
   describe('webhook POST with real fixtures', () => {
     it('accepts real Instagram DM text message (fixture) and processes 1 item', async () => {
-      const app = buildApp();
+      const app = await buildApp();
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
       const response = await request(app).post('/webhook').send(textMessage);
 
@@ -69,7 +69,7 @@ describe('instagram app', () => {
     });
 
     it('accepts batch DM fixture (2 messages) and processes both items', async () => {
-      const app = buildApp();
+      const app = await buildApp();
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
       const response = await request(app).post('/webhook').send(batchMixed);
 
@@ -86,7 +86,7 @@ describe('instagram app', () => {
     });
 
     it('deduplicates repeated message (fullyDeduped: true)', async () => {
-      const app = buildApp();
+      const app = await buildApp();
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
       const first = await request(app).post('/webhook').send(textMessage);
@@ -103,7 +103,7 @@ describe('instagram app', () => {
     });
 
     it('rejects invalid webhook payload with 400', async () => {
-      const app = buildApp();
+      const app = await buildApp();
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
       const response = await request(app).post('/webhook').send({});
       expect(response.status).toBe(400);
@@ -113,7 +113,7 @@ describe('instagram app', () => {
     });
 
     it('preserves x-correlation-id from request', async () => {
-      const app = buildApp();
+      const app = await buildApp();
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
       const customCorrelationId = 'ig-cid-123';
       const response = await request(app)
@@ -129,7 +129,7 @@ describe('instagram app', () => {
     });
 
     it('does not log payload content (PII check)', async () => {
-      const app = buildApp();
+      const app = await buildApp();
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
       await request(app).post('/webhook').send(textMessage);
@@ -147,7 +147,7 @@ describe('instagram app', () => {
 
     it('skips validation when INSTAGRAM_WEBHOOK_SECRET is not set', async () => {
       delete process.env.INSTAGRAM_WEBHOOK_SECRET;
-      const app = buildApp();
+      const app = await buildApp();
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
       const response = await request(app).post('/webhook').send(textMessage);
       expect(response.status).toBe(200);
@@ -156,7 +156,7 @@ describe('instagram app', () => {
 
     it('accepts valid signature when secret is set', async () => {
       process.env.INSTAGRAM_WEBHOOK_SECRET = TEST_SECRET;
-      const app = buildApp();
+      const app = await buildApp();
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
       const rawBody = JSON.stringify(textMessage);
@@ -176,7 +176,7 @@ describe('instagram app', () => {
 
     it('rejects invalid signature when secret is set', async () => {
       process.env.INSTAGRAM_WEBHOOK_SECRET = TEST_SECRET;
-      const app = buildApp();
+      const app = await buildApp();
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
       const rawBody = JSON.stringify(textMessage);
@@ -202,7 +202,7 @@ describe('instagram app', () => {
 
     it('returns 200 with challenge when verification is valid', async () => {
       process.env.INSTAGRAM_VERIFY_TOKEN = TEST_VERIFY_TOKEN;
-      const app = buildApp();
+      const app = await buildApp();
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
       const challenge = 'ig-challenge-string-12345';
 
@@ -224,7 +224,7 @@ describe('instagram app', () => {
 
     it('returns 403 when verify token is invalid', async () => {
       process.env.INSTAGRAM_VERIFY_TOKEN = TEST_VERIFY_TOKEN;
-      const app = buildApp();
+      const app = await buildApp();
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
       const response = await request(app)
@@ -245,7 +245,7 @@ describe('instagram app', () => {
 
     it('returns 403 when hub.mode is not subscribe', async () => {
       process.env.INSTAGRAM_VERIFY_TOKEN = TEST_VERIFY_TOKEN;
-      const app = buildApp();
+      const app = await buildApp();
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
       const response = await request(app)
@@ -266,7 +266,7 @@ describe('instagram app', () => {
 
     it('returns 503 when INSTAGRAM_VERIFY_TOKEN is not configured', async () => {
       delete process.env.INSTAGRAM_VERIFY_TOKEN;
-      const app = buildApp();
+      const app = await buildApp();
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
       const response = await request(app)

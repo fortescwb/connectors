@@ -7,8 +7,7 @@ Instagram/Meta webhook parsing and Graph API client library.
 ### ✅ Instagram DM Inbound (Active)
 
 - **Parser**: `parseInstagramRuntimeRequest()` - Batch-safe parsing of Instagram webhook payloads
-- **Fixtures**: Real webhook examples in `fixtures/`
-- **Schema**: Zod validation for Meta Instagram webhook structure
+- **Canonical event**: `InstagramInboundMessageEventSchema` (provider + channel + payload discriminated union)
 - **Dedupe**: Deterministic dedupe key format: `instagram:{recipientId}:msg:{mid}`
 - **Tests**: Unit tests covering single messages, media, batches, and invalid payloads
 
@@ -18,10 +17,20 @@ Instagram/Meta webhook parsing and Graph API client library.
 import { parseInstagramRuntimeRequest } from '@connectors/core-meta-instagram';
 
 const events = parseInstagramRuntimeRequest(runtimeRequest);
-// Returns: ParsedEvent<InstagramMessageNormalized>[]
+// Returns: ParsedEvent<InstagramInboundMessageEvent>[]
 ```
 
-**Wiring Status**: Fully integrated in `apps/instagram` with end-to-end tests.
+**Wiring Status**: Wired in `apps/instagram` with end-to-end tests (in-memory dedupe by default; Redis in staging/prod).
+
+---
+
+### 🚧 Instagram DM Outbound (staging-only)
+
+- **Builders**: `buildInstagramMessagePayload()` (supports text, link, image, video, audio, document)
+- **Sender**: `sendInstagramMessage()` and `processInstagramOutbound()` (exactly-once via `core-runtime`)
+- **Media**: Prefers `attachment_id` upload when `mediaId` is missing (URL-based upload helper included)
+- **Staging**: `/__staging/outbound` wired in `apps/instagram` (token-protected)
+- **Status**: Planned/beta — waiting on real Graph fixtures to promote capability to `active`
 
 ---
 
@@ -126,7 +135,8 @@ pnpm format  # Prettier
 
 | Feature | Status | Wired in App | Tests |
 |---------|--------|--------------|-------|
-| Instagram DM Inbound | ✅ Active | ✅ Yes | ✅ 4 unit + 17 integration |
+| Instagram DM Inbound | ✅ Active | ✅ Yes | ✅ 4 unit + integration |
+| DM Outbound (text/link/media) | 🚧 Staging-only | ⚠️ Staging endpoint wired, awaiting fixtures | ✅ unit (payload + send) |
 | Comment Reply Client | 🚧 Library Only | ❌ No | ✅ unit + integration (dedupe/idempotency) |
 
 ---

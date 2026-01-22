@@ -22,10 +22,12 @@
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\""
   },
   "dependencies": {
+    "@connectors/core-logging": "workspace:^",
     "@connectors/core-messaging": "workspace:^",
     "@connectors/core-meta-graph": "workspace:^",
     "@connectors/core-runtime": "workspace:^",
     "@connectors/core-validation": "workspace:^",
+    "cross-fetch": "^4.0.0",
     "zod": "^3.22.4"
   },
   "devDependencies": {

@@ -20,7 +20,11 @@ export const instagramManifest: ConnectorManifest = {
       'active',
       'Receive DMs via Instagram webhook (requires shared dedupe store for production)'
     ),
-    capability('outbound_messages', 'planned', 'Send DMs via Graph API (not implemented)'),
+    capability(
+      'outbound_messages',
+      'planned',
+      'Send DMs via Graph API (staging endpoint wired; awaiting real fixtures to promote)'
+    ),
     capability('message_status_updates', 'planned', 'Receive message delivery status (not implemented)'),
 
     // Comments & Engagement
@@ -41,7 +45,14 @@ export const instagramManifest: ConnectorManifest = {
 
   requiredEnvVars: ['INSTAGRAM_VERIFY_TOKEN'],
 
-  optionalEnvVars: ['INSTAGRAM_WEBHOOK_SECRET', 'INSTAGRAM_ACCESS_TOKEN']
+  optionalEnvVars: [
+    'INSTAGRAM_WEBHOOK_SECRET',
+    'INSTAGRAM_ACCESS_TOKEN',
+    'INSTAGRAM_BUSINESS_ACCOUNT_ID',
+    'INSTAGRAM_PAGE_ID',
+    'REDIS_URL',
+    'STAGING_OUTBOUND_TOKEN'
+  ]
 };
 
 export default instagramManifest;

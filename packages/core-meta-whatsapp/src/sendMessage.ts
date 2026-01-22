@@ -1,5 +1,9 @@
 import { createGraphClient, type GraphClient, type GraphClientConfig, type GraphTransport } from '@connectors/core-meta-graph';
+import { createLogger } from '@connectors/core-logging';
 import type { OutboundMessageIntent, OutboundMessagePayload } from '@connectors/core-messaging';
+import { preprocessOutboundIntent } from './preprocessIntent.js';
+
+const logger = createLogger({ component: 'sendMessage' });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Builders por tipo - cada builder transforma o intent em payload da Graph API
@@ -139,6 +143,7 @@ function buildStickerPayload(intent: OutboundMessageIntent): Record<string, unkn
 
   return {
     messaging_product: 'whatsapp',
+    recipient_type: 'individual',
     to: intent.to,
     type: 'sticker',
     sticker: stickerBlock,
@@ -188,6 +193,7 @@ function buildReactionPayload(intent: OutboundMessageIntent): Record<string, unk
 
   return {
     messaging_product: 'whatsapp',
+    recipient_type: 'individual',
     to: intent.to,
     type: 'reaction',
     reaction: {
@@ -309,6 +315,7 @@ export interface WhatsAppSendMessageConfig {
   transport?: GraphTransport;
   timeoutMs?: number;
   retry?: GraphClientConfig['retry'];
+  enableMediaUpload?: boolean; // Auto-upload media from mediaUrl if no mediaId (default: true)
 }
 
 export interface WhatsAppSendMessageResponse<T = unknown> {
@@ -321,7 +328,27 @@ export async function sendMessage<TResponse = unknown>(
   intent: OutboundMessageIntent,
   config: WhatsAppSendMessageConfig
 ): Promise<WhatsAppSendMessageResponse<TResponse>> {
-  const payload = buildPayload(intent);
+  // Pre-process intent: auto-upload media if mediaUrl provided but no mediaId
+  let processedIntent = intent;
+  if (config.enableMediaUpload !== false) {
+    try {
+      processedIntent = await preprocessOutboundIntent(intent, {
+        accessToken: config.accessToken,
+        phoneNumberId: config.phoneNumberId,
+        apiVersion: config.apiVersion,
+        baseUrl: config.baseUrl,
+        timeoutMs: config.timeoutMs
+      });
+    } catch (err) {
+      logger.warn('Media pre-processing failed, attempting to send anyway', {
+        intentId: intent.intentId,
+        error: err instanceof Error ? err.message : String(err)
+      });
+      // Continue with original intent if pre-processing fails
+    }
+  }
+
+  const payload = buildPayload(processedIntent);
 
   const client =
     config.graphClient ??

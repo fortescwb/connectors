@@ -15,6 +15,7 @@
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\" \"fixtures/**/*.json\""
   },
   "dependencies": {
+    "@connectors/core-messaging": "workspace:^",
     "@connectors/core-runtime": "workspace:^",
     "@connectors/core-validation": "workspace:^",
     "@connectors/core-logging": "workspace:^",

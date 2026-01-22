@@ -19,3 +19,26 @@ export {
   TemplateParameterSchema,
   buildWhatsAppOutboundDedupeKey
 } from './outbound/OutboundMessageIntent.js';
+export type { InstagramOutboundMessageIntent, InstagramOutboundMessagePayload } from './outbound/InstagramOutboundMessageIntent.js';
+export {
+  InstagramOutboundMessageIntentSchema,
+  InstagramOutboundMessagePayloadSchema,
+  InstagramTextMessagePayloadSchema,
+  InstagramLinkMessagePayloadSchema,
+  InstagramImageMessagePayloadSchema,
+  InstagramVideoMessagePayloadSchema,
+  InstagramAudioMessagePayloadSchema,
+  InstagramDocumentMessagePayloadSchema,
+  buildInstagramOutboundDedupeKey
+} from './outbound/InstagramOutboundMessageIntent.js';
+export type { InstagramInboundMessageEvent, InstagramInboundMessagePayload } from './inbound/InstagramInboundMessageEvent.js';
+export {
+  InstagramInboundMessageEventSchema,
+  InstagramInboundMessagePayloadSchema,
+  InstagramInboundTextPayloadSchema,
+  InstagramInboundImagePayloadSchema,
+  InstagramInboundVideoPayloadSchema,
+  InstagramInboundAudioPayloadSchema,
+  InstagramInboundDocumentPayloadSchema,
+  buildInstagramInboundDedupeKey
+} from './inbound/InstagramInboundMessageEvent.js';

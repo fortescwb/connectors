@@ -1,9 +1,19 @@
 import type { Logger } from '@connectors/core-logging';
-import type { OutboundMessageIntent } from '@connectors/core-messaging';
+import type { InstagramOutboundMessageIntent, OutboundMessageIntent } from '@connectors/core-messaging';
 
 import type { DedupeStore } from '../index.js';
 
-export type OutboundIntent = OutboundMessageIntent;
+export interface BaseOutboundIntent {
+  intentId: string;
+  tenantId: string;
+  provider: string;
+  to: string;
+  payload: unknown;
+  dedupeKey: string;
+  correlationId: string;
+}
+
+export type OutboundIntent = OutboundMessageIntent | InstagramOutboundMessageIntent | BaseOutboundIntent;
 
 export type OutboundSendFn<TIntent extends OutboundIntent = OutboundIntent, TProviderResponse = unknown> = (
   intent: TIntent,

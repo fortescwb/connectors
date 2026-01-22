@@ -1,15 +1,24 @@
 import express, { type Express } from 'express';
+import { Redis } from 'ioredis';
 
-import { createLogger } from '@connectors/core-logging';
 import { rawBodyMiddleware, type RawBodyRequest } from '@connectors/adapter-express';
+import { createLogger } from '@connectors/core-logging';
 import { verifyHmacSha256 } from '@connectors/core-signature';
-import { parseInstagramRuntimeRequest, type InstagramMessageNormalized } from '@connectors/core-meta-instagram';
+import {
+  parseInstagramRuntimeRequest,
+  processInstagramOutbound,
+  type InstagramOutboundBatchOptions
+} from '@connectors/core-meta-instagram';
+import type { InstagramInboundMessageEvent, InstagramOutboundMessageIntent } from '@connectors/core-messaging';
 import {
   buildWebhookHandlers,
   type CapabilityHandler,
   type RuntimeRequest,
   type SignatureVerifier,
-  type WebhookVerifyHandler
+  type WebhookVerifyHandler,
+  InMemoryDedupeStore,
+  RedisDedupeStore,
+  type DedupeStore
 } from '@connectors/core-runtime';
 
 import { instagramManifest } from './manifest.js';
@@ -19,6 +28,83 @@ import { instagramManifest } from './manifest.js';
 // ─────────────────────────────────────────────────────────────────────────────
 
 const logger = createLogger({ service: 'instagram-app' });
+const DEFAULT_API_VERSION = 'v19.0';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DEDUPE STORE FACTORY
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function createDedupeStore(): Promise<DedupeStore> {
+  const redisUrl = process.env.REDIS_URL;
+  const nodeEnv = process.env.NODE_ENV ?? 'development';
+  const isNonDev = nodeEnv === 'production' || nodeEnv === 'staging';
+
+  if (isNonDev && !redisUrl) {
+    const message = `REDIS_URL is required in ${nodeEnv} for distributed dedupe`;
+    logger.error(message, { nodeEnv });
+    throw new Error(message);
+  }
+
+  if (redisUrl) {
+    const useTls = redisUrl.startsWith('rediss://');
+    logger.info('Initializing Redis dedupe store', { nodeEnv, redisTls: useTls });
+
+    const redis = new Redis(redisUrl, {
+      maxRetriesPerRequest: 3,
+      enableReadyCheck: true,
+      enableOfflineQueue: true,
+      lazyConnect: true,
+      retryStrategy: (times: number) => Math.min(times * 500, 3000),
+      ...(useTls && { tls: {} })
+    });
+
+    redis.on('error', (err: Error) => {
+      logger.error('Redis connection error', { error: err.message });
+    });
+
+    if (isNonDev) {
+      const timeoutMs = 5000;
+      try {
+        await Promise.race([
+          redis.connect(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error(`Redis connect timeout after ${timeoutMs}ms`)), timeoutMs))
+        ]);
+        await redis.ping();
+        logger.info('Redis validated at boot (PING ok)', { nodeEnv });
+      } catch (err) {
+        const errorMsg = `Redis connection failed at boot in ${nodeEnv}: ${err instanceof Error ? err.message : String(err)}`;
+        logger.error(errorMsg, { nodeEnv });
+        await redis.quit().catch(() => {});
+        throw new Error(errorMsg);
+      }
+    }
+
+    const redisClientAdapter = {
+      set: async (key: string, value: string, mode: 'NX', flag: 'PX', ttlMs: number): Promise<string | null> => {
+        return redis.set(key, value, flag, ttlMs, mode);
+      },
+      exists: async (key: string): Promise<number> => redis.exists(key)
+    };
+
+    return new RedisDedupeStore({
+      client: redisClientAdapter,
+      keyPrefix: 'instagram:dedupe:',
+      failMode: isNonDev ? 'closed' : 'open',
+      onError: (error, context) => {
+        logger.error('Redis dedupe operation failed', {
+          error: error.message,
+          operation: context.operation
+        });
+      }
+    });
+  }
+
+  logger.warn('REDIS_URL not configured - using InMemoryDedupeStore', {
+    warning: 'Only suitable for local/testing',
+    nodeEnv
+  });
+  return new InMemoryDedupeStore();
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SIGNATURE VERIFIER
@@ -28,7 +114,6 @@ function createMetaSignatureVerifier(): SignatureVerifier {
   const secret = process.env.INSTAGRAM_WEBHOOK_SECRET;
 
   return {
-    // Always enabled so verify() is called, letting us log the skip
     enabled: true,
     verify: (request) => {
       if (!secret) {
@@ -105,13 +190,16 @@ const parseEvents = (request: RuntimeRequest) => parseInstagramRuntimeRequest(re
 // APP BUILDER
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function buildApp(): Express {
+export async function buildApp(): Promise<Express> {
   const app = express();
+  const dedupeStore = await createDedupeStore();
+
   const inboundMessagesHandler: CapabilityHandler = async (event, ctx) => {
-    const payload = event as InstagramMessageNormalized;
+    const payload = event as InstagramInboundMessageEvent;
     ctx.logger.info('Received Instagram DM', {
-      mid: payload.mid,
-      sender: payload.senderId
+      messageId: payload.messageId,
+      from: payload.from,
+      type: payload.payload.type
     });
   };
 
@@ -132,6 +220,7 @@ export function buildApp(): Express {
     parseEvents,
     verifyWebhook,
     signatureVerifier: createMetaSignatureVerifier(),
+    dedupeStore,
     logger
   });
 
@@ -173,6 +262,65 @@ export function buildApp(): Express {
     }
 
     res.status(result.status).json(result.body);
+  });
+
+  // STAGING OUTBOUND (token-protected)
+  app.post('/__staging/outbound', express.json(), async (req, res) => {
+    const nodeEnv = process.env.NODE_ENV ?? 'development';
+    const stagingToken = process.env.STAGING_OUTBOUND_TOKEN;
+
+    if (nodeEnv === 'production') {
+      return res.status(404).json({ ok: false, error: 'Endpoint not available in production' });
+    }
+
+    if (!stagingToken) {
+      logger.error('STAGING_OUTBOUND_TOKEN not configured');
+      return res.status(503).json({ ok: false, error: 'Staging outbound endpoint not configured' });
+    }
+
+    const providedToken = req.headers['x-staging-token'];
+    if (providedToken !== stagingToken) {
+      logger.warn('Invalid staging token attempt', { ip: req.ip });
+      return res.status(401).json({ ok: false, error: 'Invalid or missing X-Staging-Token' });
+    }
+
+    const accessToken = process.env.INSTAGRAM_ACCESS_TOKEN;
+    const instagramBusinessAccountId =
+      process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID ?? process.env.INSTAGRAM_PAGE_ID;
+
+    if (!accessToken || !instagramBusinessAccountId) {
+      return res.status(503).json({
+        ok: false,
+        error: 'Missing INSTAGRAM_ACCESS_TOKEN or INSTAGRAM_BUSINESS_ACCOUNT_ID'
+      });
+    }
+
+    const { intents } = req.body as { intents?: InstagramOutboundMessageIntent[] };
+    if (!Array.isArray(intents) || intents.length === 0) {
+      return res.status(400).json({ ok: false, error: 'Missing or empty "intents" array in request body' });
+    }
+
+    logger.info('Processing Instagram staging outbound', { intentCount: intents.length, nodeEnv });
+
+    try {
+      const result = await processInstagramOutbound(intents, {
+        accessToken,
+        instagramBusinessAccountId,
+        apiVersion: DEFAULT_API_VERSION,
+        dedupeStore,
+        uploadMedia: 'when_missing',
+        timeoutMs: 10000
+      } satisfies InstagramOutboundBatchOptions);
+
+      logger.info('Staging outbound completed', { summary: result.summary, nodeEnv });
+      return res.status(200).json({ ok: true, result });
+    } catch (err) {
+      logger.error('Staging outbound failed', {
+        error: err instanceof Error ? err.message : String(err),
+        nodeEnv
+      });
+      return res.status(500).json({ ok: false, error: err instanceof Error ? err.message : 'Unknown error' });
+    }
   });
 
   return app;
