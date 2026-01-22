@@ -3,21 +3,38 @@
   "result": {
     "summary": {
       "total": 1,
-      "sent": 0,
+      "sent": 1,
       "deduped": 0,
-      "failed": 1
+      "failed": 0
     },
     "results": [
       {
-        "intentId": "w1-image-1769022393000",
-        "dedupeKey": "whatsapp:w1-image-1769022393000",
-        "correlationId": "w1-corr-image",
+        "intentId": "b4bf2aef-e40d-470a-9039-8e4198f0c100",
+        "dedupeKey": "whatsapp:b4bf2aef-e40d-470a-9039-8e4198f0c100",
+        "correlationId": "w1-image",
         "provider": "whatsapp",
         "tenantId": "staging-test",
-        "status": "failed",
-        "errorCode": "send_failed",
-        "errorMessage": "Unsupported payload type \"image\" for WhatsApp outbound",
-        "latencyMs": 3
+        "status": "sent",
+        "latencyMs": 851,
+        "upstreamStatus": 200,
+        "providerResponse": {
+          "providerMessageId": "wamid.SANITIZED",
+          "status": 200,
+          "raw": {
+            "messaging_product": "whatsapp",
+            "contacts": [
+              {
+                "input": "+5541988991078",
+                "wa_id": "554188991078"
+              }
+            ],
+            "messages": [
+              {
+                "id": "wamid.SANITIZED"
+              }
+            ]
+          }
+        }
       }
     ]
   }

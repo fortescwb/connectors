@@ -9,13 +9,13 @@
     },
     "results": [
       {
-        "intentId": "8f985343-5a4a-4e37-939c-4e4effbb31ef",
-        "dedupeKey": "whatsapp:8f985343-5a4a-4e37-939c-4e4effbb31ef",
-        "correlationId": "w1-template",
+        "intentId": "3238c805-883f-4f19-95af-82b4e8850737",
+        "dedupeKey": "whatsapp:3238c805-883f-4f19-95af-82b4e8850737",
+        "correlationId": "w1-sticker",
         "provider": "whatsapp",
         "tenantId": "staging-test",
         "status": "sent",
-        "latencyMs": 692,
+        "latencyMs": 728,
         "upstreamStatus": 200,
         "providerResponse": {
           "providerMessageId": "wamid.SANITIZED",
@@ -30,8 +30,7 @@
             ],
             "messages": [
               {
-                "id": "wamid.SANITIZED",
-                "message_status": "accepted"
+                "id": "wamid.SANITIZED"
               }
             ]
           }

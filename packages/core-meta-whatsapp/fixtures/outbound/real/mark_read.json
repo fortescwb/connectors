@@ -3,27 +3,22 @@
   "result": {
     "summary": {
       "total": 1,
-      "sent": 1,
+      "sent": 0,
       "deduped": 0,
-      "failed": 0
+      "failed": 1
     },
     "results": [
       {
-        "intentId": "w1-real-markread-1769020671367273502",
-        "dedupeKey": "whatsapp:w1-real-markread-1769020671367273502",
-        "correlationId": "w1-real-markread",
+        "intentId": "8abb4b78-a4be-4703-bc8e-fdf2d64904b4",
+        "dedupeKey": "whatsapp:8abb4b78-a4be-4703-bc8e-fdf2d64904b4",
+        "correlationId": "w1-mark-read",
         "provider": "whatsapp",
         "tenantId": "staging-test",
-        "status": "sent",
-        "latencyMs": 300,
-        "upstreamStatus": 200,
-        "providerResponse": {
-          "success": true,
-          "status": 200,
-          "raw": {
-            "success": true
-          }
-        }
+        "status": "failed",
+        "errorCode": "send_failed",
+        "errorMessage": "(#*00) Invalid parameter",
+        "latencyMs": 203,
+        "upstreamStatus": 400
       }
     ]
   }

@@ -9,16 +9,16 @@
     },
     "results": [
       {
-        "intentId": "w1-real-reaction-1769020656980465806",
-        "dedupeKey": "whatsapp:w1-real-reaction-1769020656980465806",
-        "correlationId": "w1-real-reaction",
+        "intentId": "bfad883b-f420-4ae2-81a7-2f299e7bd593",
+        "dedupeKey": "whatsapp:bfad883b-f420-4ae2-81a7-2f299e7bd593",
+        "correlationId": "w1-reaction",
         "provider": "whatsapp",
         "tenantId": "staging-test",
         "status": "sent",
-        "latencyMs": 697,
+        "latencyMs": 644,
         "upstreamStatus": 200,
         "providerResponse": {
-          "providerMessageId": "wamid.HBgMNTU0MTg4OTkxMDc4FQIAERgSOEY4MDA3NEZENzJGODBEQjVBAA==",
+          "providerMessageId": "wamid.SANITIZED",
           "status": 200,
           "raw": {
             "messaging_product": "whatsapp",
@@ -30,7 +30,7 @@
             ],
             "messages": [
               {
-                "id": "wamid.HBgMNTU0MTg4OTkxMDc4FQIAERgSOEY4MDA3NEZENzJGODBEQjVBAA=="
+                "id": "wamid.SANITIZED"
               }
             ]
           }

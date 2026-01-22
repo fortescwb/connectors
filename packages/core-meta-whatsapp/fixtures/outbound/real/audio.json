@@ -1,1 +1,41 @@
-{"ok":true,"result":{"summary":{"total":1,"sent":1,"deduped":0,"failed":0},"results":[{"intentId":"w1-real-audio-mediaId-1769021527725907513","dedupeKey":"whatsapp:w1-real-audio-mediaId-1769021527725907513","correlationId":"w1-real-audio-mediaId","provider":"whatsapp","tenantId":"staging-test","status":"sent","latencyMs":807,"upstreamStatus":200,"providerResponse":{"providerMessageId":"wamid.HBgMNTU0MTg4OTkxMDc4FQIAERgSMkQzQTgwNkZCQjE0NEM2OUNEAA==","status":200,"raw":{"messaging_product":"whatsapp","contacts":[{"input":"+5541988991078","wa_id":"554188991078"}],"messages":[{"id":"wamid.HBgMNTU0MTg4OTkxMDc4FQIAERgSMkQzQTgwNkZCQjE0NEM2OUNEAA=="}]}}}]}}
+{
+  "ok": true,
+  "result": {
+    "summary": {
+      "total": 1,
+      "sent": 1,
+      "deduped": 0,
+      "failed": 0
+    },
+    "results": [
+      {
+        "intentId": "c31a3f04-4d83-46d2-aded-06b7cdb2f121",
+        "dedupeKey": "whatsapp:c31a3f04-4d83-46d2-aded-06b7cdb2f121",
+        "correlationId": "w1-audio",
+        "provider": "whatsapp",
+        "tenantId": "staging-test",
+        "status": "sent",
+        "latencyMs": 781,
+        "upstreamStatus": 200,
+        "providerResponse": {
+          "providerMessageId": "wamid.SANITIZED",
+          "status": 200,
+          "raw": {
+            "messaging_product": "whatsapp",
+            "contacts": [
+              {
+                "input": "+5541988991078",
+                "wa_id": "554188991078"
+              }
+            ],
+            "messages": [
+              {
+                "id": "wamid.SANITIZED"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
+}
