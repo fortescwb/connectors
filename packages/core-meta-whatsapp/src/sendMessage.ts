@@ -99,6 +99,53 @@ function buildImagePayload(intent: OutboundMessageIntent): Record<string, unknow
   };
 }
 
+function buildVideoPayload(intent: OutboundMessageIntent): Record<string, unknown> {
+  const payload = intent.payload;
+  if (payload.type !== 'video') {
+    throw new Error(`buildVideoPayload: expected type 'video', got '${payload.type}'`);
+  }
+
+  const videoBlock: Record<string, string> = {};
+  if ('mediaId' in payload && payload.mediaId) {
+    videoBlock.id = payload.mediaId;
+  } else if ('mediaUrl' in payload && payload.mediaUrl) {
+    videoBlock.link = payload.mediaUrl;
+  }
+  if (payload.caption) {
+    videoBlock.caption = payload.caption;
+  }
+
+  return {
+    messaging_product: 'whatsapp',
+    to: intent.to,
+    type: 'video',
+    video: videoBlock,
+    client_msg_id: intent.intentId
+  };
+}
+
+function buildStickerPayload(intent: OutboundMessageIntent): Record<string, unknown> {
+  const payload = intent.payload;
+  if (payload.type !== 'sticker') {
+    throw new Error(`buildStickerPayload: expected type 'sticker', got '${payload.type}'`);
+  }
+
+  const stickerBlock: Record<string, string> = {};
+  if ('mediaId' in payload && payload.mediaId) {
+    stickerBlock.id = payload.mediaId;
+  } else if ('mediaUrl' in payload && payload.mediaUrl) {
+    stickerBlock.link = payload.mediaUrl;
+  }
+
+  return {
+    messaging_product: 'whatsapp',
+    to: intent.to,
+    type: 'sticker',
+    sticker: stickerBlock,
+    client_msg_id: intent.intentId
+  };
+}
+
 function buildContactsPayload(intent: OutboundMessageIntent): Record<string, unknown> {
   const payload = intent.payload;
   if (payload.type !== 'contacts') {
@@ -147,6 +194,33 @@ function buildReactionPayload(intent: OutboundMessageIntent): Record<string, unk
       message_id: payload.messageId,
       emoji: payload.emoji
     },
+    client_msg_id: intent.intentId
+  };
+}
+
+function buildLocationPayload(intent: OutboundMessageIntent): Record<string, unknown> {
+  const payload = intent.payload;
+  if (payload.type !== 'location') {
+    throw new Error(`buildLocationPayload: expected type 'location', got '${payload.type}'`);
+  }
+
+  const location: Record<string, unknown> = {
+    latitude: payload.latitude,
+    longitude: payload.longitude
+  };
+
+  if (payload.name) {
+    location.name = payload.name;
+  }
+  if (payload.address) {
+    location.address = payload.address;
+  }
+
+  return {
+    messaging_product: 'whatsapp',
+    to: intent.to,
+    type: 'location',
+    location,
     client_msg_id: intent.intentId
   };
 }
@@ -209,10 +283,16 @@ function buildPayload(intent: OutboundMessageIntent): Record<string, unknown> {
       return buildDocumentPayload(intent);
     case 'image':
       return buildImagePayload(intent);
+    case 'video':
+      return buildVideoPayload(intent);
+    case 'sticker':
+      return buildStickerPayload(intent);
     case 'contacts':
       return buildContactsPayload(intent);
     case 'reaction':
       return buildReactionPayload(intent);
+    case 'location':
+      return buildLocationPayload(intent);
     case 'template':
       return buildTemplatePayload(intent);
     default:

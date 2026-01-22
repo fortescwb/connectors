@@ -64,7 +64,7 @@ describe('sendMessage', () => {
 
   it('throws for unsupported payload types', async () => {
     const intent = makeIntent({
-      payload: { type: 'image', text: 'n/a' } as never
+        payload: { type: 'unsupported_foo' } as never
     });
 
     await expect(
@@ -263,6 +263,71 @@ describe('sendMessage - document payload', () => {
   });
 });
 
+describe('sendMessage - video payload', () => {
+  it('builds correct API payload for video message with mediaId', async () => {
+    const calls: Array<{ body?: string }> = [];
+    const transport = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ body: init?.body as string });
+      return new Response(JSON.stringify({ messages: [{ id: 'wamid.VIDEO' }] }), { status: 200 });
+    });
+
+    const intent = makeIntent({
+      payload: {
+        type: 'video',
+        mediaId: 'media-video-123',
+        caption: 'sample video'
+      }
+    });
+
+    await sendMessage(intent, {
+      accessToken: 'token-test',
+      phoneNumberId: '12345',
+      transport,
+      retry: { maxRetries: 0 }
+    });
+
+    expect(calls).toHaveLength(1);
+    const body = JSON.parse(calls[0]?.body ?? '{}');
+    expect(body).toMatchObject({
+      messaging_product: 'whatsapp',
+      type: 'video',
+      video: { id: 'media-video-123', caption: 'sample video' }
+    });
+  });
+});
+
+describe('sendMessage - sticker payload', () => {
+  it('builds correct API payload for sticker message with mediaUrl', async () => {
+    const calls: Array<{ body?: string }> = [];
+    const transport = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ body: init?.body as string });
+      return new Response(JSON.stringify({ messages: [{ id: 'wamid.STICKER' }] }), { status: 200 });
+    });
+
+    const intent = makeIntent({
+      payload: {
+        type: 'sticker',
+        mediaUrl: 'https://example.com/sticker.webp'
+      }
+    });
+
+    await sendMessage(intent, {
+      accessToken: 'token-test',
+      phoneNumberId: '12345',
+      transport,
+      retry: { maxRetries: 0 }
+    });
+
+    expect(calls).toHaveLength(1);
+    const body = JSON.parse(calls[0]?.body ?? '{}');
+    expect(body).toMatchObject({
+      messaging_product: 'whatsapp',
+      type: 'sticker',
+      sticker: { link: 'https://example.com/sticker.webp' }
+    });
+  });
+});
+
 describe('sendMessage - contacts payload', () => {
   it('builds correct API payload for contacts message', async () => {
     const calls: Array<{ body?: string }> = [];
@@ -313,6 +378,46 @@ describe('sendMessage - reaction payload', () => {
       reaction: {
         message_id: (intent.payload as { messageId: string }).messageId,
         emoji: (intent.payload as { emoji: string }).emoji
+      }
+    });
+  });
+});
+
+describe('sendMessage - location payload', () => {
+  it('builds correct API payload for fixed location', async () => {
+    const calls: Array<{ body?: string }> = [];
+    const transport = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ body: init?.body as string });
+      return new Response(JSON.stringify({ messages: [{ id: 'wamid.LOC.FIXED' }] }), { status: 200 });
+    });
+
+    const intent = makeIntent({
+      payload: {
+        type: 'location',
+        latitude: -23.55052,
+        longitude: -46.633308,
+        name: 'São Paulo',
+        address: 'SP, Brasil'
+      }
+    });
+
+    await sendMessage(intent, {
+      accessToken: 'token-test',
+      phoneNumberId: '12345',
+      transport,
+      retry: { maxRetries: 0 }
+    });
+
+    expect(calls).toHaveLength(1);
+    const body = JSON.parse(calls[0]?.body ?? '{}');
+    expect(body).toMatchObject({
+      messaging_product: 'whatsapp',
+      type: 'location',
+      location: {
+        latitude: -23.55052,
+        longitude: -46.633308,
+        name: 'São Paulo',
+        address: 'SP, Brasil'
       }
     });
   });
@@ -417,7 +522,7 @@ describe('sendWhatsAppOutbound', () => {
   // ─────────────────────────────────────────────────────────────────────────
   // Retry and error handling tests for all message types
   // ─────────────────────────────────────────────────────────────────────────
-  it.each(['audio', 'document', 'contacts', 'reaction', 'template'])(
+  it.each(['audio', 'document', 'contacts', 'reaction', 'template', 'video', 'sticker'])(
     '%s: retries on 5xx then succeeds without duplicating side-effect',
     async (type) => {
       vi.useFakeTimers();
@@ -425,6 +530,8 @@ describe('sendWhatsAppOutbound', () => {
                       type === 'document' ? documentFixture :
                       type === 'contacts' ? contactsFixture :
                       type === 'reaction' ? reactionFixture :
+                      type === 'video' ? { intent: makeIntent({ payload: { type: 'video', mediaUrl: 'https://example.com/video.mp4' } }), expectedResponse: { messages: [{ id: 'wamid.VIDEO.RETRY' }] } } :
+                      type === 'sticker' ? { intent: makeIntent({ payload: { type: 'sticker', mediaId: 'media-sticker-1' } }), expectedResponse: { messages: [{ id: 'wamid.STICKER.RETRY' }] } } :
                       templateFixture;
 
       const responses = [

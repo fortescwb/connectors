@@ -39,6 +39,21 @@ export const ImageMessagePayloadSchema = z.object({
   caption: z.string().optional()
 });
 
+/** Video message payload - at least one of mediaId/mediaUrl must be provided */
+export const VideoMessagePayloadSchema = z.object({
+  type: z.literal('video'),
+  mediaId: z.string().min(1).optional(),
+  mediaUrl: z.string().url().optional(),
+  caption: z.string().optional()
+});
+
+/** Sticker message payload - at least one of mediaId/mediaUrl must be provided */
+export const StickerMessagePayloadSchema = z.object({
+  type: z.literal('sticker'),
+  mediaId: z.string().min(1).optional(),
+  mediaUrl: z.string().url().optional()
+});
+
 /** Contact info schema (for contacts message) */
 export const ContactInfoSchema = z.object({
   name: z.object({
@@ -76,6 +91,15 @@ export const MarkReadPayloadSchema = z.object({
   messageId: z.string().min(1, 'messageId to mark as read is required')
 });
 
+/** Location message payload (fixed location) */
+export const LocationMessagePayloadSchema = z.object({
+  type: z.literal('location'),
+  latitude: z.number().min(-90).max(90, 'latitude must be between -90 and 90'),
+  longitude: z.number().min(-180).max(180, 'longitude must be between -180 and 180'),
+  name: z.string().optional(),
+  address: z.string().optional()
+});
+
 /** Template component parameter */
 export const TemplateParameterSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('text'), text: z.string() }),
@@ -108,9 +132,12 @@ export const OutboundMessagePayloadSchema = z.discriminatedUnion('type', [
   AudioMessagePayloadSchema,
   DocumentMessagePayloadSchema,
   ImageMessagePayloadSchema,
+  VideoMessagePayloadSchema,
+  StickerMessagePayloadSchema,
   ContactsMessagePayloadSchema,
   ReactionMessagePayloadSchema,
   MarkReadPayloadSchema,
+  LocationMessagePayloadSchema,
   TemplateMessagePayloadSchema
 ]);
 export type OutboundMessagePayload = z.infer<typeof OutboundMessagePayloadSchema>;
@@ -149,6 +176,24 @@ export const OutboundMessageIntentSchema = z.object({
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Either mediaId or mediaUrl must be provided for document',
+        path: ['payload']
+      });
+    }
+  }
+  if (payload.type === 'video') {
+    if (!payload.mediaId && !payload.mediaUrl) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Either mediaId or mediaUrl must be provided for video',
+        path: ['payload']
+      });
+    }
+  }
+  if (payload.type === 'sticker') {
+    if (!payload.mediaId && !payload.mediaUrl) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Either mediaId or mediaUrl must be provided for sticker',
         path: ['payload']
       });
     }
