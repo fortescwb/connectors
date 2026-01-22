@@ -257,6 +257,33 @@ cd /home/fortes/Repositórios/connectors
 
 ---
 
+## ✅ W1 Fonte de Verdade: Tipos Suportados
+
+**Depois que W1 completa, estes são os tipos confirmadamente suportados pelo Cloud API:**
+
+### Suportados (10 tipos)
+- `text` — Mensagens de texto
+- `audio` — Voice notes (Opus, mono, 16kHz)
+- `image` — JPEG/PNG com caption opcional
+- `video` — MP4/H.264 com caption opcional
+- `document` — PDF/Word/Excel com filename
+- `sticker` — WebP stickers
+- `contacts` — vCard (1+ contacts com phones/emails)
+- `location` — Localização fixa (abre mapa no WhatsApp)
+- `reaction` — Emoji reactions a mensagens
+- `template` — Mensagens template pré-aprovadas
+
+### Informacional (1)
+- `mark_read` — Read receipts (invisível ao usuário)
+
+### Não Suportados (Removidos)
+- ❌ `location_live` — API não permite outbound live_location
+- ❌ `location_request` — Requer conversa 24h + perms WABA
+
+**Referência oficial:** [packages/core-meta-whatsapp/fixtures/outbound/real/README.md](packages/core-meta-whatsapp/fixtures/outbound/real/README.md)
+
+---
+
 ## 💬 Precisa de Ajuda?
 
 1. **Dúvida técnica?** → Consulte W1_CAPTURA_FIXTURES.md

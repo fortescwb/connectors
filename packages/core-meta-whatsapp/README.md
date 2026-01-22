@@ -211,9 +211,14 @@ await sendWhatsAppOutbound(
 | `text` | `text`, `previewUrl?` | Plain text with optional link preview |
 | `audio` | `mediaId` or `mediaUrl` | Audio file (ogg, mp3, etc.) |
 | `document` | `mediaId` or `mediaUrl`, `filename?`, `caption?` | PDF, DOC, etc. |
+| `image` | `mediaId` or `mediaUrl`, `caption?` | JPEG/PNG |
+| `video` | `mediaId` or `mediaUrl`, `caption?` | MP4/H.264 (≤16 MB) |
+| `sticker` | `mediaId` or `mediaUrl` | WebP sticker |
 | `contacts` | `contacts[]` with `name`, `phones?`, `emails?` | vCard-style sharing |
 | `reaction` | `messageId`, `emoji` | React to a message |
+| `location` | `latitude`, `longitude`, `name?`, `address?` | Fixed location (static) |
 | `template` | `templateName`, `languageCode`, `components?` | Pre-approved templates |
+| `mark_read` | `messageId` | Mark inbound message as read |
 
 ## Fixtures
 
