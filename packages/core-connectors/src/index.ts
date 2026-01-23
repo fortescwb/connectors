@@ -5,9 +5,9 @@ export * from './calendar.js';
 export * from './automation.js';
 
 /**
- * Capability status indicates whether a feature is active, planned, or disabled.
+ * Capability status indicates whether a feature is active, scaffold, planned, or disabled.
  */
-export const CapabilityStatusSchema = z.enum(['active', 'planned', 'disabled']);
+export const CapabilityStatusSchema = z.enum(['active', 'scaffold', 'planned', 'disabled']);
 export type CapabilityStatus = z.infer<typeof CapabilityStatusSchema>;
 
 /**

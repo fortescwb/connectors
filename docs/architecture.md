@@ -317,7 +317,7 @@ Campos obrigatórios em todos os eventos (`EventEnvelope`):
 - Schemas Zod em `core-events` são expostos junto com tipos inferidos.
 - `parseEventEnvelope` retorna um discriminated union por `eventType`.
 - Use `safeParseOrThrow(schema, data, context)` (`core-validation`) para erros claros e tipados (`ValidationError`).
-- Webhooks: `core-runtime` é o caminho atual; `core-webhooks`/`adapter-express` permanecem apenas por compatibilidade legada (deprecated).
+- Webhooks: `core-runtime` é o caminho atual; `core-webhooks`/`adapter-express` permanecem apenas por compatibilidade legada (deprecated) e não devem ser usados em novos conectores.
 
 ### Multi-tenant
 - `TenantId` é um tipo branded (`@connectors/core-tenant`).
@@ -375,12 +375,12 @@ Endpoint principal para receber webhooks do Meta/WhatsApp.
 | `200` | Evento duplicado (já visto) | `{ ok: true, deduped: true, correlationId }` |
 | `400` | Payload inválido (validação Zod falhou) | `{ ok: false, code: "WEBHOOK_VALIDATION_FAILED", message: "...", correlationId }` |
 | `401` | Assinatura inválida (middleware WhatsApp) | `{ ok: false, code: "UNAUTHORIZED", message: "Invalid signature", correlationId }` |
-| `401` | Handler interno sinaliza 401 (core-webhooks) | `{ ok: false, code: "UNAUTHORIZED", message: "unauthorized", correlationId }` |
+| `401` | Handler interno sinaliza 401 (runtime) | `{ ok: false, code: "UNAUTHORIZED", message: "unauthorized", correlationId }` |
 | `500` | Erro interno não esperado | `{ ok: false, code: "INTERNAL_ERROR", message: "internal_error", correlationId }` |
 
 > **Nota:** Em qualquer status (sucesso ou erro), o header `x-correlation-id` é retornado e espelha o `correlationId` do corpo.
 
-> **Duas origens de 401:** A mensagem `"Invalid signature"` indica falha na validação HMAC (middleware de assinatura). A mensagem `"unauthorized"` indica que o handler da aplicação ou `parseEvent` lançou um erro com `status: 401` (tratado pelo core-webhooks). Essa distinção ajuda no diagnóstico.
+> **Duas origens de 401:** A mensagem `"Invalid signature"` indica falha na validação HMAC (middleware de assinatura). A mensagem `"unauthorized"` indica que o handler da aplicação ou `parseEvent` lançou um erro com `status: 401` (tratado pelo runtime). Essa distinção ajuda no diagnóstico.
 
 ### Política de Assinatura
 

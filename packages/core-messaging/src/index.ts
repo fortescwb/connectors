@@ -29,7 +29,8 @@ export {
   InstagramVideoMessagePayloadSchema,
   InstagramAudioMessagePayloadSchema,
   InstagramDocumentMessagePayloadSchema,
-  buildInstagramOutboundDedupeKey
+  buildInstagramOutboundDedupeKey,
+  buildInstagramOutboundDmDedupeKey
 } from './outbound/InstagramOutboundMessageIntent.js';
 export type { InstagramInboundMessageEvent, InstagramInboundMessagePayload } from './inbound/InstagramInboundMessageEvent.js';
 export {
