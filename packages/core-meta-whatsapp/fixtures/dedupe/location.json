@@ -1,0 +1,37 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "WABA_PLACEHOLDER",
+      "changes": [
+        {
+          "field": "messages",
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": {
+              "display_phone_number": "15550009999",
+              "phone_number_id": "PHONE_ID_001"
+            },
+            "contacts": [
+              { "profile": { "name": "Fixture User" }, "wa_id": "15551230001" }
+            ],
+            "messages": [
+              {
+                "from": "15551230001",
+                "id": "wamid.fake.location.001",
+                "timestamp": "1737600008",
+                "location": {
+                  "latitude": 37.422003,
+                  "longitude": -122.084031,
+                  "name": "Connector Park",
+                  "address": "1600 Test Amphitheatre Pkwy"
+                },
+                "type": "location"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

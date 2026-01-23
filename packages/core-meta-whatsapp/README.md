@@ -4,29 +4,23 @@ Parser, schemas, and outbound message sender for Meta WhatsApp Business API.
 
 ## Principal Functionality Status
 
-> **Status definition:**
-> - **✅ Implemented**: Code complete, unit tests passing, fixtures present
-> - **🟡 Active (Staging)**: Builders + testes completo, pendente validação com tráfego real em staging
-> - **🟢 REAL (Production-Ready)**: Fixtures reais capturados, integração testada, pronto para produção
+> **Status definition (monorepo policy):**
+> - **🟢 Active**: Validated with real staging traffic, fixtures in repo, regression tests + dedupe proven.
+> - **🚧 Scaffold**: Code + fixtures/tests locally, but **not** validated in staging yet (do not market as ready).
+> - **📋 Backlog**: Planned only.
 
 | Capability | Status | Notes |
 |------------|--------|-------|
-| **Inbound messages** | ✅ Active | text, image, document, webhook verification, dedupe by wamid |
-| **Status updates** | ✅ Active | sent, delivered, read, failed, dedupe by id+status |
-| **Outbound: text** | 🟡 Active | builders complete, retry/backoff, preview_url support, fixtures present |
-| **Outbound: audio** | 🟡 Active | builders complete, mediaId/mediaUrl support, retry/backoff, fixtures present |
-| **Outbound: document** | 🟡 Active | builders complete, filename/caption support, retry/backoff, fixtures present |
-| **Outbound: contacts** | 🟡 Active | builders complete, multi-contact vCard support, fixtures present |
-| **Outbound: reaction** | 🟡 Active | builders complete, emoji support, fixtures present |
-| **Outbound: template** | 🟡 Active | builders complete, components/parameters, retry/backoff, fixtures present |
-| **Mark as read** | 🟡 Active | builders complete, read receipts, retry/backoff, fixtures present |
+| **Inbound messages** | 🟢 Active | Validated in staging for: text, audio, document, video, sticker, reaction, template, contact, location. Dedupe by `wamid` + phoneNumberId; regression suite frozen in `apps/whatsapp`. |
+| **Status updates** | 🚧 Scaffold | Parsing + dedupe implemented (sent/delivered/read/failed) but lacking staging fixtures/validation. |
+| **Outbound (text, audio, document, contacts, reaction, template, mark_read)** | 🚧 Scaffold | Builders + retry/backoff + unit/integration tests exist; staging Graph validation pending, keep non-active. |
 | Template management | 📋 Backlog | CRUD operations for templates |
 | Media upload | 📋 Backlog | Upload media to WhatsApp servers |
 | Interactive messages | 📋 Backlog | Buttons, lists, product messages |
 
-## Status Transition: Active → REAL
+## Status Transition: Scaffold → Active
 
-The 7 outbound types (text, audio, document, contacts, reaction, template, mark_read) are currently **🟡 Active** and transition to **🟢 REAL** through staging validation.
+The 7 outbound types (text, audio, document, contacts, reaction, template, mark_read) are currently **🚧 Scaffold** and move to **🟢 Active** only after staging validation with real Graph traffic + captured fixtures.
 
 ### What's complete:
 - ✅ Builders (payload generation per type)

@@ -1,0 +1,37 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "WABA_PLACEHOLDER",
+      "changes": [
+        {
+          "field": "messages",
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": {
+              "display_phone_number": "15550009999",
+              "phone_number_id": "PHONE_ID_001"
+            },
+            "contacts": [
+              { "profile": { "name": "Fixture User" }, "wa_id": "15551230001" }
+            ],
+            "messages": [
+              {
+                "from": "15551230001",
+                "id": "wamid.fake.video.001",
+                "timestamp": "1737600003",
+                "video": {
+                  "id": "MEDIA_VIDEO_001",
+                  "mime_type": "video/mp4",
+                  "sha256": "video-hash-001",
+                  "caption": "Short product clip"
+                },
+                "type": "video"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
