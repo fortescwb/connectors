@@ -3,12 +3,14 @@ import { describe, expect, it } from 'vitest';
 import {
   InstagramOutboundMessageIntentSchema,
   buildInstagramOutboundDedupeKey,
+  buildInstagramOutboundDmDedupeKey,
   InstagramInboundMessageEventSchema,
   buildInstagramInboundDedupeKey
 } from '../src/index.js';
 
 const baseOutboundIntent = {
   intentId: '550e8400-e29b-41d4-a716-446655440000',
+  clientMessageId: 'client-msg-ig-001',
   tenantId: 'tenant-ig-123',
   provider: 'instagram' as const,
   to: '17890000000000000',
@@ -39,6 +41,15 @@ describe('InstagramOutboundMessageIntentSchema', () => {
         payload: { type: 'image', caption: 'no source' }
       })
     ).toThrow(/mediaId or url/);
+  });
+
+  it('requires clientMessageId', () => {
+    expect(() =>
+      InstagramOutboundMessageIntentSchema.parse({
+        ...baseOutboundIntent,
+        clientMessageId: undefined
+      })
+    ).toThrow(/clientMessageId/);
   });
 });
 
@@ -78,6 +89,11 @@ describe('Instagram dedupe key builders', () => {
   it('builds outbound dedupe key without PII', () => {
     const key = buildInstagramOutboundDedupeKey('tenant-x', 'intent-y');
     expect(key).toBe('instagram:tenant:tenant-x:intent:intent-y');
+  });
+
+  it('builds outbound DM dedupe key using recipient + clientMessageId', () => {
+    const key = buildInstagramOutboundDmDedupeKey('17890000000000000', 'client-msg-1');
+    expect(key).toBe('instagram:outbound:dm:17890000000000000:client-msg-1');
   });
 
   it('builds inbound dedupe key', () => {

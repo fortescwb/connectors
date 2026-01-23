@@ -59,6 +59,7 @@ export const InstagramOutboundMessageIntentSchema = z.object({
     .refine((value) => uuidPattern.test(value) || ulidPattern.test(value), {
       message: 'intentId must be a UUID or ULID'
     }),
+  clientMessageId: z.string().min(1, 'clientMessageId is required'),
   tenantId: z.string().min(1, 'tenantId is required'),
   provider: z.literal('instagram'),
   to: z.string().min(1, 'to is required'),
@@ -100,4 +101,25 @@ export function buildInstagramOutboundDedupeKey(tenantId: string, intentId: stri
   const normalizedIntent = intentId.trim();
 
   return `instagram:tenant:${normalizedTenant}:intent:${normalizedIntent}`;
+}
+
+/**
+ * Build a deterministic dedupe key for Instagram outbound DM intents.
+ *
+ * Stable inputs:
+ * - recipientId: Instagram user/page id (operational identifier)
+ * - clientMessageId: caller-provided idempotency key
+ */
+export function buildInstagramOutboundDmDedupeKey(recipientId: string, clientMessageId: string): string {
+  if (!recipientId || !recipientId.trim()) {
+    throw new Error('recipientId is required to build an Instagram outbound DM dedupe key');
+  }
+  if (!clientMessageId || !clientMessageId.trim()) {
+    throw new Error('clientMessageId is required to build an Instagram outbound DM dedupe key');
+  }
+
+  const normalizedRecipient = recipientId.trim();
+  const normalizedClientMessageId = clientMessageId.trim();
+
+  return `instagram:outbound:dm:${normalizedRecipient}:${normalizedClientMessageId}`;
 }
