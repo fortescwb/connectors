@@ -1,3 +1,5 @@
+import type { z } from 'zod';
+
 import { safeParseOrThrow } from '@connectors/core-validation';
 import type { ParsedEvent, RuntimeRequest } from '@connectors/core-runtime';
 import {
@@ -6,44 +8,13 @@ import {
   type InstagramInboundMessagePayload,
   buildInstagramInboundDedupeKey
 } from '@connectors/core-messaging';
-import { z } from 'zod';
 
-const InstagramAttachmentSchema = z.object({
-  type: z.string(),
-  payload: z
-    .object({
-      url: z.string().url().optional(),
-      sticker_id: z.string().optional(),
-      id: z.string().optional()
-    })
-    .optional()
-});
-
-const InstagramMessageSchema = z.object({
-  mid: z.string(),
-  text: z.string().optional(),
-  attachments: z.array(InstagramAttachmentSchema).optional()
-});
-
-const InstagramMessagingSchema = z.object({
-  sender: z.object({ id: z.string() }),
-  recipient: z.object({ id: z.string() }),
-  timestamp: z.number(),
-  message: InstagramMessageSchema
-});
-
-const InstagramEntrySchema = z.object({
-  id: z.string(),
-  time: z.number(),
-  messaging: z.array(InstagramMessagingSchema)
-});
-
-export const InstagramWebhookSchema = z.object({
-  object: z.literal('instagram').or(z.literal('page')).optional(),
-  entry: z.array(InstagramEntrySchema)
-});
-
-export type InstagramWebhookBody = z.infer<typeof InstagramWebhookSchema>;
+import {
+  InstagramWebhookSchema,
+  type InstagramWebhookBody,
+  InstagramMessageSchema,
+  InstagramMessagingSchema
+} from './schemas.js';
 
 function mapAttachmentToPayload(message: z.infer<typeof InstagramMessageSchema>): InstagramInboundMessagePayload {
   if (message.attachments && message.attachments.length > 0) {
@@ -83,6 +54,9 @@ function mapAttachmentToPayload(message: z.infer<typeof InstagramMessageSchema>)
 function normalizeMessagingItem(
   messaging: z.infer<typeof InstagramMessagingSchema>
 ): ParsedEvent<InstagramInboundMessageEvent> {
+  if (!messaging.message.mid) {
+    throw new Error('Instagram message.mid is required for dedupe');
+  }
   const messagePayload = mapAttachmentToPayload(messaging.message);
   const dedupeKey = buildInstagramInboundDedupeKey(messaging.recipient.id, messaging.message.mid);
 
@@ -106,12 +80,21 @@ function normalizeMessagingItem(
   };
 }
 
+/**
+ * @internal Assumes payload already validated; prefer parseInstagramRuntimeRequest.
+ * @deprecated Use parseInstagramRuntimeRequest instead.
+ */
 export function parseInstagramWebhookPayload(body: InstagramWebhookBody): ParsedEvent<InstagramInboundMessageEvent>[] {
   const events: ParsedEvent<InstagramInboundMessageEvent>[] = [];
 
   for (const entry of body.entry) {
     for (const messaging of entry.messaging) {
-      events.push(normalizeMessagingItem(messaging));
+      try {
+        events.push(normalizeMessagingItem(messaging));
+      } catch {
+        // Skip invalid messaging item to keep batch processing resilient
+        continue;
+      }
     }
   }
 
@@ -124,5 +107,6 @@ export function parseInstagramWebhookPayload(body: InstagramWebhookBody): Parsed
  */
 export function parseInstagramRuntimeRequest(request: RuntimeRequest): ParsedEvent<InstagramInboundMessageEvent>[] {
   const body = safeParseOrThrow(InstagramWebhookSchema, request.body, 'instagram-webhook');
-  return parseInstagramWebhookPayload(body);
+  const parsed = parseInstagramWebhookPayload(body);
+  return parsed.filter(Boolean);
 }

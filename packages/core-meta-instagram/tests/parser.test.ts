@@ -8,7 +8,7 @@ import type { InstagramInboundMessageEvent } from '@connectors/core-messaging';
 import { parseInstagramRuntimeRequest } from '../src/index.js';
 
 function loadFixture(name: string): RuntimeRequest {
-  const raw = readFileSync(join(__dirname, '..', 'fixtures', name), 'utf-8');
+  const raw = readFileSync(join(__dirname, '..', 'fixtures', 'inbound', name), 'utf-8');
   return {
     headers: {},
     query: {},
@@ -18,20 +18,20 @@ function loadFixture(name: string): RuntimeRequest {
 
 describe('parseInstagramRuntimeRequest', () => {
   it('parses single text message and builds dedupeKey', () => {
-    const request = loadFixture('message_text.json');
+    const request = loadFixture('text.json');
     const events = parseInstagramRuntimeRequest(request);
     expect(events).toHaveLength(1);
     const event = events[0];
     const payload = event.payload as InstagramInboundMessageEvent;
     expect(event.capabilityId).toBe('inbound_messages');
-    expect(event.dedupeKey).toBe('instagram:17841400000000000:msg:m_igmsg_111');
+    expect(event.dedupeKey).toBe('instagram:17841400000000000:msg:m_igmsg_text_001');
     expect(payload.payload.type).toBe('text');
     expect(payload.payload).toEqual({ type: 'text', text: 'hello from ig dm' });
     expect(payload.timestamp).toMatch(/T/);
   });
 
   it('parses media message and preserves attachments', () => {
-    const request = loadFixture('message_media.json');
+    const request = loadFixture('media.json');
     const events = parseInstagramRuntimeRequest(request);
     expect(events).toHaveLength(1);
     const payload = events[0].payload as InstagramInboundMessageEvent;
@@ -40,12 +40,19 @@ describe('parseInstagramRuntimeRequest', () => {
   });
 
   it('parses batch with multiple messaging items', () => {
-    const request = loadFixture('batch_mixed.json');
+    const request = loadFixture('batch.json');
     const events = parseInstagramRuntimeRequest(request);
     expect(events).toHaveLength(2);
     const dedupeKeys = events.map((e) => e.dedupeKey);
     expect(dedupeKeys).toContain('instagram:17841400000000000:msg:m_igmsg_batch_1');
     expect(dedupeKeys).toContain('instagram:17841400000000000:msg:m_igmsg_batch_2');
+  });
+
+  it('skips invalid messaging item but processes remaining items', () => {
+    const request = loadFixture('invalid_missing_mid.json');
+    const events = parseInstagramRuntimeRequest(request);
+    expect(events).toHaveLength(1);
+    expect(events[0].dedupeKey).toBe('instagram:17841400000000000:msg:m_igmsg_valid_after_invalid');
   });
 
   it('rejects invalid payload', () => {

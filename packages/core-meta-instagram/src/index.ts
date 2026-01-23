@@ -1,10 +1,7 @@
-export {
-  InstagramWebhookSchema,
-  parseInstagramRuntimeRequest,
-  parseInstagramWebhookPayload,
-  type InstagramWebhookBody
-} from './inbound/parseWebhook.js';
+export { parseInstagramRuntimeRequest, parseInstagramWebhookPayload } from './inbound/parseWebhook.js';
+export { InstagramWebhookSchema, type InstagramWebhookBody } from './inbound/schemas.js';
 export { buildInstagramMessagePayload } from './outbound/buildPayload.js';
+export { buildInstagramOutboundRequest } from './outbound/buildOutboundRequest.js';
 export {
   sendInstagramMessage,
   processInstagramOutbound,
@@ -13,7 +10,11 @@ export {
   type InstagramOutboundBatchOptions
 } from './outbound/sendMessage.js';
 export { createInstagramGraphClient, uploadAttachmentFromUrl } from './client.js';
-export { buildInstagramInboundDedupeKey, buildInstagramOutboundDedupeKey } from './dedupe.js';
+export {
+  buildInstagramInboundDedupeKey,
+  buildInstagramOutboundDedupeKey,
+  buildInstagramOutboundDmDedupeKey
+} from './dedupe.js';
 
 export {
   sendCommentReplyBatch,

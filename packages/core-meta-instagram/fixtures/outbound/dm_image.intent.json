@@ -1,0 +1,15 @@
+{
+  "intentId": "550e8400-e29b-41d4-a716-446655440000",
+  "clientMessageId": "ig-stg-image-001",
+  "tenantId": "tenant-ig-123",
+  "provider": "instagram",
+  "to": "17890000000000000",
+  "payload": {
+    "type": "image",
+    "mediaId": "media_001",
+    "caption": "optional caption"
+  },
+  "dedupeKey": "instagram:outbound:dm:17890000000000000:ig-stg-image-001",
+  "correlationId": "corr-ig-stg-image-001",
+  "createdAt": "2026-01-23T00:00:00.000Z"
+}

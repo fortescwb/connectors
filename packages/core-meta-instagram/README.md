@@ -4,12 +4,14 @@ Instagram/Meta webhook parsing and Graph API client library.
 
 ## Features
 
-### ✅ Instagram DM Inbound (Active)
+Public API (inbound): use `parseInstagramRuntimeRequest()`; `parseInstagramWebhookPayload()` is internal/deprecated and assumes a validated payload.
+
+### 🟢 Instagram DM Inbound (active)
 
 - **Parser**: `parseInstagramRuntimeRequest()` - Batch-safe parsing of Instagram webhook payloads
 - **Canonical event**: `InstagramInboundMessageEventSchema` (provider + channel + payload discriminated union)
 - **Dedupe**: Deterministic dedupe key format: `instagram:{recipientId}:msg:{mid}`
-- **Tests**: Unit tests covering single messages, media, batches, and invalid payloads
+- **Tests**: Unit tests covering single messages, media, batches, and invalid payloads; staging validation executed per runbook (see evidence below)
 
 **Usage:**
 
@@ -20,7 +22,7 @@ const events = parseInstagramRuntimeRequest(runtimeRequest);
 // Returns: ParsedEvent<InstagramInboundMessageEvent>[]
 ```
 
-**Wiring Status**: Wired in `apps/instagram` with end-to-end tests (in-memory dedupe by default; Redis in staging/prod).
+**Wiring Status**: Wired in `apps/instagram` with E2E tests; staging validated for inbound DM (text, image/audio) with dedupe confirmed. Capability remains inbound-only.
 
 ---
 
@@ -31,6 +33,7 @@ const events = parseInstagramRuntimeRequest(runtimeRequest);
 - **Media**: Prefers `attachment_id` upload when `mediaId` is missing (URL-based upload helper included)
 - **Staging**: `/__staging/outbound` wired in `apps/instagram` (token-protected)
 - **Status**: Planned/beta — waiting on real Graph fixtures to promote capability to `active`
+- **Runbook**: `apps/instagram/OUTBOUND_STAGING_RUNBOOK.md` (DM texto: intent, dedupeKey, evidências)
 
 ---
 
@@ -100,13 +103,33 @@ To promote to `active`, implement:
 
 ---
 
+## Staging Validation (Gate T3.2 → Promo Gate T3.3)
+
+- Runbook executado: `apps/instagram/STAGING_RUNBOOK.md`.
+- Evidências (staging, 2026-01-23; sanitized):
+  - Scenario 1 (DM text): correlationId `ig-stg-text-20260123-01`, summary `{total:1, processed:1, deduped:0}`.
+  - Scenario 2 (DM image): correlationId `ig-stg-media-20260123-02`, summary `{total:1, processed:1, deduped:0}`, payload type `image`.
+  - Scenario 3 (batch 2 msgs): correlationId `ig-stg-batch-20260123-03`, summary `{total:2, processed:2, deduped:0}`.
+  - Scenario 4 (replay dedupe): correlationId `ig-stg-replay-20260123-04`, summary `{total:1, processed:0, deduped:1, fullyDeduped:true}`.
+  - Scenario 5 (invalid signature): correlationId `ig-stg-sig-20260123-05`, status `401`, code `UNAUTHORIZED`.
+- Logs reviewed via correlationId filters; no PII/payload observed.
+- Dedupe confirmed in staging with Redis; signature/verify validated.
+
+### Rollback (if staging regression occurs)
+1. Revert `inbound_messages` status in `apps/instagram/src/manifest.ts` to `scaffold`.
+2. Remove/annotate evidence block above if invalidated.
+3. Deploy rollback; keep runbook for re-validation.
+
+---
+
 ## Fixtures
 
 Real webhook payloads (sanitized) are available in `fixtures/`:
 
-- `message_text.json` - Single text DM
-- `message_media.json` - Single media DM (image attachment)
-- `batch_mixed.json` - Batch with 2 messages (text + media)
+- `inbound/text.json` - Single text DM
+- `inbound/media.json` - Single media DM (image)
+- `inbound/batch.json` - Batch with 2 messages (text + media)
+- `inbound/invalid_missing_mid.json` - Batch containing an invalid item (used to assert batch resilience)
 
 ---
 
@@ -135,7 +158,7 @@ pnpm format  # Prettier
 
 | Feature | Status | Wired in App | Tests |
 |---------|--------|--------------|-------|
-| Instagram DM Inbound | ✅ Active | ✅ Yes | ✅ 4 unit + integration |
+| Instagram DM Inbound | 🚧 Scaffold | ✅ Yes (local only) | ✅ unit + app tests (no staging validation) |
 | DM Outbound (text/link/media) | 🚧 Staging-only | ⚠️ Staging endpoint wired, awaiting fixtures | ✅ unit (payload + send) |
 | Comment Reply Client | 🚧 Library Only | ❌ No | ✅ unit + integration (dedupe/idempotency) |
 

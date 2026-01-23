@@ -6,6 +6,7 @@ import { buildInstagramMessagePayload } from '../src/outbound/buildPayload.js';
 
 const baseIntent: InstagramOutboundMessageIntent = {
   intentId: '550e8400-e29b-41d4-a716-446655440000',
+  clientMessageId: 'client-msg-ig-001',
   tenantId: 'tenant-ig-123',
   provider: 'instagram',
   to: '17890000000000000',

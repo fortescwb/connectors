@@ -1,0 +1,10 @@
+{
+  "method": "POST",
+  "url": "v19.0/17890000000000001/messages",
+  "body": {
+    "messaging_type": "RESPONSE",
+    "recipient": { "id": "17890000000000000" },
+    "message": { "text": "hello ig outbound" },
+    "metadata": "ig-outbound-corr-1"
+  }
+}

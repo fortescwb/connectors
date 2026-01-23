@@ -11,7 +11,7 @@ import {
   type OutboundSendFn
 } from '@connectors/core-runtime';
 
-import { buildInstagramMessagePayload } from './buildPayload.js';
+import { buildInstagramOutboundRequest } from './buildOutboundRequest.js';
 import { createInstagramGraphClient, uploadAttachmentFromUrl } from '../client.js';
 
 export type UploadMode = 'when_missing' | 'never';
@@ -83,9 +83,22 @@ export async function sendInstagramMessage<T = unknown>(
   config: InstagramSendMessageConfig
 ): Promise<InstagramSendMessageResult<T>> {
   const validated = InstagramOutboundMessageIntentSchema.parse(intent);
-  const logger = config.logger ?? createLogger({ service: 'core-meta-instagram', component: 'outbound' });
+  const logger =
+    config.logger ??
+    createLogger({
+      service: 'core-meta-instagram',
+      component: 'outbound',
+      connector: 'instagram',
+      capabilityId: 'outbound_messages',
+      correlationId: validated.correlationId
+    });
   const attachmentId = await maybeUploadMedia(validated, config, logger);
-  const graphPayload = buildInstagramMessagePayload(validated, { attachmentId });
+  const outboundRequest = buildInstagramOutboundRequest(validated, {
+    instagramBusinessAccountId: config.instagramBusinessAccountId,
+    apiVersion: config.apiVersion,
+    baseUrl: config.baseUrl,
+    attachmentId
+  });
 
   const client =
     config.graphClient ??
@@ -101,7 +114,7 @@ export async function sendInstagramMessage<T = unknown>(
       logger
     });
 
-  const response = await client.post<T>(`${config.instagramBusinessAccountId}/messages`, graphPayload, {
+  const response = await client.post<T>(outboundRequest.url, outboundRequest.body, {
     timeoutMs: config.timeoutMs,
     retry: config.retry
   });
@@ -109,6 +122,14 @@ export async function sendInstagramMessage<T = unknown>(
   const data = response.data as unknown;
   const providerMessageId =
     (data as { message_id?: string } | undefined)?.message_id ?? (data as { id?: string } | undefined)?.id;
+
+  logger.info('Instagram outbound send completed', {
+    status: response.status,
+    correlationId: validated.correlationId,
+    dedupeKey: validated.dedupeKey,
+    providerMessageId,
+    type: validated.payload.type
+  });
 
   return {
     status: response.status,

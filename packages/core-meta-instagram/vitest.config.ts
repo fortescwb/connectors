@@ -1,9 +1,9 @@
-import { defineConfig } from 'vitest/config';
+import { mergeConfig } from 'vitest/config';
 
-export default defineConfig({
+import baseConfig from '../../tooling/vitest.config.base';
+
+export default mergeConfig(baseConfig, {
   test: {
-    globals: true,
-    environment: 'node',
     coverage: {
       provider: 'v8'
     }

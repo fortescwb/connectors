@@ -1,1 +1,5 @@
-export { buildInstagramInboundDedupeKey, buildInstagramOutboundDedupeKey } from '@connectors/core-messaging';
+export {
+  buildInstagramInboundDedupeKey,
+  buildInstagramOutboundDedupeKey,
+  buildInstagramOutboundDmDedupeKey
+} from '@connectors/core-messaging';
