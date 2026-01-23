@@ -18,12 +18,12 @@ export const instagramManifest: ConnectorManifest = {
     capability(
       'inbound_messages',
       'active',
-      'Receive DMs via Instagram webhook (requires shared dedupe store for production)'
+      'Instagram DM inbound (text, image/audio attachments) validated in staging; batch-safe runtime + Redis dedupe required'
     ),
     capability(
       'outbound_messages',
       'planned',
-      'Send DMs via Graph API (staging endpoint wired; awaiting real fixtures to promote)'
+      'Send DMs via Graph API (staging endpoint wired; awaiting real fixtures and staging validation to promote)'
     ),
     capability('message_status_updates', 'planned', 'Receive message delivery status (not implemented)'),
 

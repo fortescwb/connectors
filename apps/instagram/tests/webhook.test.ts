@@ -26,7 +26,7 @@ describe('instagram app', () => {
       expect(instagramManifest.capabilities.length).toBeGreaterThan(0);
     });
 
-    it('declares inbound_messages as active', () => {
+    it('declares inbound_messages as active (DM inbound)', () => {
       const inboundCapability = instagramManifest.capabilities.find((c) => c.id === 'inbound_messages');
       expect(inboundCapability).toBeDefined();
       expect(inboundCapability?.status).toBe('active');
