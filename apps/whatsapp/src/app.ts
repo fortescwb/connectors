@@ -33,17 +33,17 @@ export const whatsappManifest: ConnectorManifest = {
     capability(
       'inbound_messages',
       'active',
-      'Receive messages via WhatsApp webhook (requires shared dedupe store for production)'
+      'Receive inbound messages (text, audio, document, video, sticker, reaction, template, contact, location) validated with fixtures + regression tests; Redis dedupe required in staging/prod'
     ),
     capability(
       'message_status_updates',
-      'active',
-      'Receive message delivery status (requires shared dedupe store for production)'
+      'scaffold',
+      'Status updates parsing exists but lacks staging validation/fixtures; keep scaffold until real traffic is verified'
     ),
     capability(
       'outbound_messages',
-      'active',
-      'Send messages via Graph API (text, audio, document, contacts, reaction, template, mark_read)'
+      'scaffold',
+      'Outbound builders + staging endpoint exist; not validated with real Graph traffic yet'
     ),
     capability('webhook_verification', 'active', 'Meta webhook verification endpoint')
   ],

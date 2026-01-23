@@ -1,0 +1,40 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "WABA_PLACEHOLDER",
+      "changes": [
+        {
+          "field": "messages",
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": {
+              "display_phone_number": "15550009999",
+              "phone_number_id": "PHONE_ID_001"
+            },
+            "contacts": [
+              {
+                "profile": { "name": "Fixture User" },
+                "wa_id": "15551230001"
+              }
+            ],
+            "messages": [
+              {
+                "from": "15551230001",
+                "id": "wamid.fake.audio.001",
+                "timestamp": "1737600001",
+                "audio": {
+                  "id": "MEDIA_AUDIO_001",
+                  "mime_type": "audio/ogg",
+                  "sha256": "audio-hash-001",
+                  "voice": true
+                },
+                "type": "audio"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

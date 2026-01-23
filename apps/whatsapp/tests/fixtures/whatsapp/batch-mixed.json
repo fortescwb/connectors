@@ -1,0 +1,82 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "WABA_PLACEHOLDER",
+      "changes": [
+        {
+          "field": "messages",
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": {
+              "display_phone_number": "15550009999",
+              "phone_number_id": "PHONE_ID_001"
+            },
+            "contacts": [
+              {
+                "profile": { "name": "Fixture User" },
+                "wa_id": "15551230001"
+              }
+            ],
+            "messages": [
+              {
+                "from": "15551230001",
+                "id": "wamid.mixed.text.001",
+                "timestamp": "1737600100",
+                "text": { "body": "Mixed batch text" },
+                "type": "text"
+              },
+              {
+                "from": "15551230001",
+                "id": "wamid.mixed.document.002",
+                "timestamp": "1737600101",
+                "document": {
+                  "id": "MEDIA_DOC_900",
+                  "mime_type": "application/pdf",
+                  "sha256": "doc-hash-900",
+                  "filename": "policy.pdf"
+                },
+                "type": "document"
+              },
+              {
+                "from": "15551230001",
+                "id": "wamid.mixed.audio.003",
+                "timestamp": "1737600102",
+                "audio": {
+                  "id": "MEDIA_AUDIO_900",
+                  "mime_type": "audio/ogg",
+                  "sha256": "audio-hash-900",
+                  "voice": false
+                },
+                "type": "audio"
+              },
+              {
+                "from": "15551230001",
+                "id": "wamid.mixed.reaction.004",
+                "timestamp": "1737600103",
+                "reaction": {
+                  "emoji": "🔥",
+                  "message_id": "wamid.mixed.text.001",
+                  "action": "react"
+                },
+                "type": "reaction"
+              },
+              {
+                "from": "15551230001",
+                "id": "wamid.mixed.location.005",
+                "timestamp": "1737600104",
+                "location": {
+                  "latitude": -23.55052,
+                  "longitude": -46.633308,
+                  "name": "Connector HQ",
+                  "address": "Av. Paulista, 1000"
+                },
+                "type": "location"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

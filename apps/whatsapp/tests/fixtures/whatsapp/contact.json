@@ -1,0 +1,45 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "WABA_PLACEHOLDER",
+      "changes": [
+        {
+          "field": "messages",
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": {
+              "display_phone_number": "15550009999",
+              "phone_number_id": "PHONE_ID_001"
+            },
+            "contacts": [
+              {
+                "profile": { "name": "Fixture User" },
+                "wa_id": "15551230001"
+              }
+            ],
+            "messages": [
+              {
+                "from": "15551230001",
+                "id": "wamid.fake.contact.001",
+                "timestamp": "1737600007",
+                "contacts": [
+                  {
+                    "name": { "formatted_name": "John Doe", "first_name": "John" },
+                    "phones": [
+                      { "phone": "15550123456", "type": "CELL" }
+                    ],
+                    "emails": [
+                      { "email": "john.doe@example.test", "type": "WORK" }
+                    ]
+                  }
+                ],
+                "type": "contacts"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
