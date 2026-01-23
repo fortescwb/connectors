@@ -88,6 +88,7 @@ test_text_message() {
     
     local payload=$(build_intent "text" '{
       "type": "text",
+      "clientMessageId": "99d277e7-1ef4-4b11-a305-5ce017403eb9",
       "text": "🧪 Test Message - Text Type: Hello from Instagram Connector!"
     }')
     
@@ -112,6 +113,7 @@ test_image_message() {
     
     local payload=$(build_intent "image" '{
       "type": "image",
+      "clientMessageId": "3800f9cb-ed48-4013-a538-747852b8889c",
       "mediaUrl": "https://www.gstatic.com/webp/gallery/1.png",
       "caption": "📸 Test Image - This is a sample image"
     }')
@@ -137,6 +139,7 @@ test_audio_message() {
     
     local payload=$(build_intent "audio" '{
       "type": "audio",
+      "clientMessageId": "d6686363-4312-431e-a5a9-865f9e7f08c0",
       "mediaUrl": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
     }')
     
